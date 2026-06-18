@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Trivia de Palomas 🕊️</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#1a1035;--card:#241848;--pk:#f72585;--go:#ffd60a;--pu:#7209b7;
+  --tx:#f0e6ff;--mu:#a08cc0;--green:#06d6a0;--red:#ef233c;
+}
+html,body{height:100%}
+body{
+  background:var(--bg);color:var(--tx);
+  font-family:'Segoe UI',Arial,sans-serif;
+  min-height:100vh;overflow-x:hidden;
+  -webkit-tap-highlight-color:transparent;
+}
+#cv{position:fixed;inset:0;pointer-events:none;z-index:0}
+
+/* ── HEADER ── */
+#hdr{
+  position:sticky;top:0;z-index:50;
+  background:rgba(26,16,53,.95);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  border-bottom:1px solid rgba(247,37,133,.25);
+  padding:10px 16px;
+  display:none;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+}
+#hdr.on{display:flex}
+.hdr-name{font-size:.82rem;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%}
+.hdr-name b{color:var(--tx);display:block;font-size:.95rem}
+.hdr-score{text-align:right;white-space:nowrap}
+.hdr-score span{font-family:'Pacifico',cursive;font-size:1.4rem;color:var(--go);display:block;line-height:1}
+.hdr-score small{font-size:.65rem;color:var(--mu);text-transform:uppercase;letter-spacing:.05em}
+
+/* ── WRAP ── */
+.wrap{
+  position:relative;z-index:1;
+  max-width:520px;margin:0 auto;
+  padding:20px 14px 60px;
+}
+
+/* ── SCREENS ── */
+.screen{display:none;animation:fadeIn .3s ease}
+.screen.act{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ── CARD ── */
+.card{
+  background:var(--card);
+  border-radius:20px;padding:26px 20px;
+  border:1px solid rgba(247,37,133,.2);
+  box-shadow:0 8px 40px rgba(114,9,183,.3);
+  margin-bottom:16px;
+}
+
+/* ── TYPOGRAPHY ── */
+@import url('https://fonts.googleapis.com/css2?family=Pacifico&display=swap');
+h1{
+  font-family:'Pacifico',cursive;
+  font-size:2rem;text-align:center;
+  background:linear-gradient(135deg,var(--pk),var(--go));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  margin-bottom:6px;line-height:1.2;
+}
+h2{
+  font-family:'Pacifico',cursive;font-size:1.15rem;
+  color:var(--go);margin-bottom:14px;text-align:center;
+}
+.sub{text-align:center;color:var(--mu);font-size:.88rem;margin-bottom:22px;line-height:1.6}
+
+/* ── INTRO ── */
+.intro-emoji{font-size:3.5rem;text-align:center;display:block;margin-bottom:10px;animation:bnc .9s ease-in-out infinite alternate}
+@keyframes bnc{from{transform:translateY(0)}to{transform:translateY(-10px)}}
+label{display:block;font-size:.72rem;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px}
+input[type=text]{
+  width:100%;background:rgba(255,255,255,.07);
+  border:2px solid rgba(247,37,133,.35);border-radius:12px;
+  padding:14px 16px;color:var(--tx);font-size:17px;
+  font-family:'Segoe UI',Arial,sans-serif;outline:none;
+  transition:border-color .2s,box-shadow .2s;
+  -webkit-appearance:none;
+}
+input[type=text]:focus{border-color:var(--pk);box-shadow:0 0 0 4px rgba(247,37,133,.15)}
+input::placeholder{color:rgba(160,140,192,.4)}
+
+/* ── BUTTONS ── */
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;padding:16px;border-radius:14px;border:none;
+  font-family:'Segoe UI',Arial,sans-serif;font-size:1rem;font-weight:700;
+  cursor:pointer;color:#fff;transition:opacity .2s,transform .1s;
+  -webkit-appearance:none;touch-action:manipulation;
+  background:linear-gradient(135deg,var(--pk),var(--pu));
+  box-shadow:0 4px 20px rgba(247,37,133,.4);
+  margin-top:10px;
+}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.btn-go{background:linear-gradient(135deg,var(--go),#fb8500);box-shadow:0 4px 20px rgba(255,214,10,.3);color:#1a1035}
+.btn-green{background:linear-gradient(135deg,var(--green),#0a9272);box-shadow:0 4px 20px rgba(6,214,160,.3)}
+.btn-wa{background:linear-gradient(135deg,#25d366,#128c7e);box-shadow:0 4px 20px rgba(37,211,102,.3)}
+.btn-sm{padding:13px;font-size:.92rem}
+
+/* ── PROGRESS ── */
+.pgw{margin-bottom:18px}
+.pg-info{display:flex;justify-content:space-between;font-size:.75rem;color:var(--mu);margin-bottom:6px}
+.pg-info b{color:var(--go)}
+.pgt{background:rgba(255,255,255,.08);border-radius:999px;height:7px;overflow:hidden}
+.pgf{height:100%;background:linear-gradient(90deg,var(--pk),var(--go));border-radius:999px;transition:width .4s ease}
+
+/* ── STAGE BADGE ── */
+.stage-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  background:rgba(247,37,133,.15);border:1px solid rgba(247,37,133,.3);
+  border-radius:999px;padding:5px 14px;font-size:.75rem;font-weight:700;
+  color:var(--pk);text-transform:uppercase;letter-spacing:.06em;
+  margin-bottom:16px;
+}
+.stage-badge.stage2{background:rgba(255,214,10,.12);border-color:rgba(255,214,10,.3);color:var(--go)}
+
+/* ── QUESTION ── */
+.amiga-tag{
+  display:inline-block;background:rgba(114,9,183,.3);border:1px solid rgba(114,9,183,.5);
+  border-radius:8px;padding:3px 10px;font-size:.72rem;font-weight:700;color:#c77dff;
+  margin-bottom:12px;
+}
+.q-text{
+  font-size:1.05rem;font-weight:600;line-height:1.5;
+  color:var(--tx);margin-bottom:20px;
+}
+
+/* ── OPTIONS ── */
+.opts{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.opt{
+  width:100%;padding:14px 16px;border-radius:12px;border:2px solid rgba(247,37,133,.25);
+  background:rgba(255,255,255,.05);color:var(--tx);font-size:.95rem;font-weight:500;
+  font-family:'Segoe UI',Arial,sans-serif;text-align:left;cursor:pointer;
+  transition:border-color .15s,background .15s,transform .1s;
+  -webkit-appearance:none;touch-action:manipulation;line-height:1.4;
+}
+.opt:hover:not(:disabled){background:rgba(247,37,133,.08);border-color:rgba(247,37,133,.5)}
+.opt:active:not(:disabled){transform:scale(.98)}
+.opt:disabled{cursor:not-allowed}
+.opt.correct{background:rgba(6,214,160,.15)!important;border-color:var(--green)!important;color:var(--green)!important;font-weight:700}
+.opt.wrong{background:rgba(239,35,60,.15)!important;border-color:var(--red)!important;color:#ff6b7a!important}
+.opt.dim{opacity:.4}
+
+/* ── FEEDBACK ── */
+.feedback{
+  border-radius:12px;padding:13px 16px;font-size:.9rem;font-weight:600;
+  text-align:center;margin-bottom:14px;display:none;line-height:1.5;
+}
+.feedback.on{display:block}
+.feedback.ok{background:rgba(6,214,160,.12);border:1px solid rgba(6,214,160,.4);color:var(--green)}
+.feedback.err{background:rgba(239,35,60,.12);border:1px solid rgba(239,35,60,.4);color:#ff6b7a}
+
+/* ── TRANSITION ── */
+.trans-icon{font-size:4rem;text-align:center;display:block;margin-bottom:14px;animation:bnc .8s infinite alternate}
+.score-big{font-family:'Pacifico',cursive;font-size:3rem;color:var(--go);text-align:center;display:block;margin:10px 0}
+
+/* ── FINAL ── */
+.final-icon{font-size:4rem;text-align:center;display:block;margin-bottom:12px;animation:spin 2s linear infinite}
+@keyframes spin{0%{transform:rotate(0deg) scale(1)}50%{transform:rotate(180deg) scale(1.1)}100%{transform:rotate(360deg) scale(1)}}
+.score-display{
+  background:linear-gradient(135deg,rgba(247,37,133,.15),rgba(114,9,183,.15));
+  border:2px solid rgba(247,37,133,.4);border-radius:16px;
+  padding:20px;text-align:center;margin:16px 0;
+}
+.score-total{font-family:'Pacifico',cursive;font-size:3.2rem;color:var(--go);display:block;line-height:1}
+.score-label{font-size:.8rem;color:var(--mu);text-transform:uppercase;letter-spacing:.07em;margin-top:4px}
+.score-breakdown{display:flex;gap:12px;margin-top:14px}
+.score-part{flex:1;background:rgba(255,255,255,.05);border-radius:12px;padding:12px;text-align:center}
+.score-part-n{font-size:1.4rem;font-weight:700;color:var(--go);display:block}
+.score-part-l{font-size:.7rem;color:var(--mu)}
+.ranking-msg{
+  background:rgba(255,214,10,.08);border:1px solid rgba(255,214,10,.25);
+  border-radius:12px;padding:14px;text-align:center;
+  font-size:.85rem;color:var(--mu);line-height:1.6;margin:14px 0;
+}
+.ranking-msg b{color:var(--go)}
+
+/* ── TOAST ── */
+#tst{
+  position:fixed;bottom:24px;left:50%;
+  transform:translateX(-50%) translateY(100px);
+  background:rgba(30,15,60,.95);border:1px solid rgba(247,37,133,.4);
+  color:var(--tx);padding:12px 22px;border-radius:999px;
+  font-weight:600;font-size:.88rem;z-index:999;
+  transition:transform .3s;white-space:nowrap;max-width:92vw;text-align:center;
+}
+#tst.on{transform:translateX(-50%) translateY(0)}
+
+/* ── SPINNER ── */
+.sp{display:inline-block;width:18px;height:18px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:rot .7s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<!-- HEADER -->
+<div id="hdr">
+  <div class="hdr-name">
+    Jugando<b id="hdrName">—</b>
+  </div>
+  <div class="hdr-score">
+    <span id="hdrScore">0</span>
+    <small>puntos</small>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- ══ INTRO ══ -->
+  <div id="scIntro" class="screen act">
+    <div class="card" style="text-align:center">
+      <span class="intro-emoji">🕊️</span>
+      <h1>Trivia de Palomas</h1>
+      <p class="sub">
+        2 etapas · 40 preguntas<br>
+        <span style="color:var(--go)">¿Cuánto conocés a tus amigas?</span>
+      </p>
+      <div style="text-align:left;margin-bottom:6px">
+        <label for="ni">Tu nombre para el ranking</label>
+        <input id="ni" type="text" placeholder="Ej: Valentina" maxlength="30" autocomplete="off" autocorrect="off" spellcheck="false">
+      </div>
+      <button class="btn btn-go" id="btnStart" onclick="iniciarJuego()" disabled style="margin-top:16px;font-size:1.05rem">
+        🚀 Comenzar Juego
+      </button>
+      <div style="margin-top:22px;background:rgba(255,255,255,.04);border-radius:12px;padding:14px;text-align:left">
+        <p style="font-size:.78rem;color:var(--mu);line-height:1.8">
+          <b style="color:var(--pk)">Etapa 1 — Trivia de Amigas</b><br>
+          26 preguntas &nbsp;·&nbsp; ✅ correcta: <b style="color:var(--green)">+10 pts</b> &nbsp;·&nbsp; ❌ incorrecta: <b style="color:var(--mu)">0 pts</b><br><br>
+          <b style="color:var(--go)">Etapa 2 — Trivia General</b><br>
+          14 preguntas &nbsp;·&nbsp; ✅ correcta: <b style="color:var(--green)">+10 pts</b> &nbsp;·&nbsp; ❌ incorrecta: <b style="color:var(--red)">−5 pts</b>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ JUEGO ══ -->
+  <div id="scJuego" class="screen">
+    <div class="card">
+      <!-- badge de etapa -->
+      <div style="text-align:center;margin-bottom:12px">
+        <span class="stage-badge" id="stageBadge">⭐ Etapa 1 · Trivia de Amigas</span>
+      </div>
+      <!-- progreso -->
+      <div class="pgw">
+        <div class="pg-info">
+          <span>Pregunta <b id="pgNum">1</b> de <b id="pgOf">26</b></span>
+          <span id="pgPct">0%</span>
+        </div>
+        <div class="pgt"><div class="pgf" id="pgf" style="width:0%"></div></div>
+      </div>
+      <!-- amiga tag (solo etapa 1) -->
+      <div id="amigaTag" class="amiga-tag">👩 Claudia</div>
+      <!-- pregunta -->
+      <div class="q-text" id="qText"></div>
+      <!-- opciones -->
+      <div class="opts" id="opts"></div>
+      <!-- feedback -->
+      <div class="feedback" id="feedback"></div>
+      <!-- siguiente -->
+      <button class="btn" id="btnNext" onclick="siguiente()" style="display:none">
+        Siguiente →
+      </button>
+    </div>
+  </div>
+
+  <!-- ══ TRANSICIÓN ══ -->
+  <div id="scTrans" class="screen">
+    <div class="card" style="text-align:center;padding:32px 20px">
+      <span class="trans-icon">🎉</span>
+      <h2 style="font-size:1.4rem;margin-bottom:8px">¡Etapa 1 completada!</h2>
+      <p class="sub" style="margin-bottom:18px">Conocés muy bien a tus amigas 💜</p>
+      <div class="score-display">
+        <span class="score-total" id="scoreEtapa1">—</span>
+        <div class="score-label">puntos en Etapa 1</div>
+      </div>
+      <p style="font-size:.88rem;color:var(--mu);margin:18px 0;line-height:1.6">
+        Ahora viene la <b style="color:var(--go)">Trivia General</b>:<br>
+        Argentina, Messi, Boca y Batman 🏆<br>
+        <span style="color:var(--red);font-size:.82rem">⚠️ Las incorrectas restan 5 puntos</span>
+      </p>
+      <button class="btn btn-go" onclick="iniciarEtapa2()" style="font-size:1.05rem">
+        ⚡ ¡Vamos a la Etapa 2!
+      </button>
+    </div>
+  </div>
+
+  <!-- ══ FINAL ══ -->
+  <div id="scFinal" class="screen">
+    <div class="card" style="text-align:center;padding:28px 20px">
+      <span class="final-icon">🏆</span>
+      <h1 style="font-size:1.6rem;margin-bottom:6px">¡Terminaste!</h1>
+      <p style="color:var(--mu);font-size:.9rem;margin-bottom:4px">Tu resultado final, <b id="finalName" style="color:var(--tx)"></b>:</p>
+
+      <div class="score-display">
+        <span class="score-total" id="finalScore">—</span>
+        <div class="score-label">puntos totales</div>
+        <div class="score-breakdown">
+          <div class="score-part">
+            <span class="score-part-n" id="finalS1">—</span>
+            <div class="score-part-l">Etapa 1</div>
+          </div>
+          <div class="score-part">
+            <span class="score-part-n" id="finalS2">—</span>
+            <div class="score-part-l">Etapa 2</div>
+          </div>
+          <div class="score-part">
+            <span class="score-part-n" id="finalCorr">—</span>
+            <div class="score-part-l">Correctas</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ranking-msg">
+        Mandá tu puntaje a la organizadora para armar el <b>Ranking de Palomas</b> 🕊️
+      </div>
+
+      <button class="btn btn-wa btn-sm" onclick="compartirWA()">
+        💬 Enviar mi puntaje por WhatsApp
+      </button>
+      <button class="btn btn-sm" onclick="descargarPDF()" id="btnPDF" style="margin-top:10px">
+        🏅 Descargar mi Certificado (PDF)
+      </button>
+      <button class="btn btn-sm" onclick="reiniciar()" style="margin-top:10px;background:rgba(255,255,255,.1);box-shadow:none">
+        🔄 Jugar de nuevo
+      </button>
+    </div>
+  </div>
+
+</div><!-- /wrap -->
+
+<div id="tst"></div>
+
+<script>
+/* ══════════════════════════════════════════════
+   BANCO DE PREGUNTAS
+══════════════════════════════════════════════ */
+const ETAPA1 = [
+  { amiga:"Claudia", q:"¿Cuál es su comida favorita?",
+    opts:["Lasagna...o siempre pastas!","Asadito","Bife de chorizo con fritas","Carne, siempre carne!!!"],
+    correcta:"Lasagna...o siempre pastas!" },
+  { amiga:"Claudia", q:"¿Quién es su cantante favorito? Amor de mis amores",
+    opts:["Joaquín Sabina","Alejandro Lerner","Leo Matioli","Andrea Bocelli"],
+    correcta:"Joaquín Sabina" },
+  { amiga:"Emilia", q:"¿Cuál es su serie favorita?",
+    opts:["This is us","Envidiosa","Tumberos","The Mentalist"],
+    correcta:"This is us" },
+  { amiga:"Emilia", q:"¿Cuál es su famoso favorito?",
+    opts:["Luciano Castro","Ova Sabatini","Leo Messi","Joaquin Furriel"],
+    correcta:"Luciano Castro" },
+  { amiga:"Jimena", q:"¿Cuál es su serie favorita?",
+    opts:["Friends","This is us","Envidiosa","Tumberos"],
+    correcta:"Friends" },
+  { amiga:"Jimena", q:"¿Cuánto calza?",
+    opts:["36,5","36","37","37,5"],
+    correcta:"36,5" },
+  { amiga:"Leti", q:"Podría vivir a base de...",
+    opts:["Papas fritas, Salmón y helado","Asado, lechuga, palmitos","Pastas, frutillas y helado","Malfatis caseros"],
+    correcta:"Papas fritas, Salmón y helado" },
+  { amiga:"Leti", q:"Top 3 de placeres de la vida:",
+    opts:["1-Viajar, 2-Comer Rico, 3-Dormir","1-Amar, 2-Aprender, 3-Analizar","1-Dormir, 2-Libertinaje, 3-Ser madre","1-Viajar, 2-Cocinar, 3-Limpiar"],
+    correcta:"1-Viajar, 2-Comer Rico, 3-Dormir" },
+  { amiga:"Lolo", q:"¿Qué comida podría comer todos los días sin cansarse?",
+    opts:["Fideos blancos con queso =)","Tortitas raspadas","Bolo de queiso","Sushi"],
+    correcta:"Fideos blancos con queso =)" },
+  { amiga:"Lolo", q:"¿Cuál canción de Disney es su preferida y llora cuando la escucha?",
+    opts:["En mi corazón, tú vivirás (Tarzán)","Noviembre sin ti - Reik","El Ciclo sin fin - Rey León","Hay un amigo en mí - Toy Story"],
+    correcta:"En mi corazón, tú vivirás (Tarzán)" },
+  { amiga:"Mari", q:"¿Cuál es su vicio?",
+    opts:["Los videojuegos y la lectura","Estudiar cosas raras","Leer novelas de amor","Andar en bicicleta"],
+    correcta:"Los videojuegos y la lectura" },
+  { amiga:"Mari", q:"¿A qué lugar le gustaría que fuera su próximo viaje con las Palomas?",
+    opts:["Disney","Valle de la Luna","Aruba","Grecia"],
+    correcta:"Disney" },
+  { amiga:"Pache", q:"¿A qué animal se parece en agilidad?",
+    opts:["Panda","Leopardo","Koala","Hiena"],
+    correcta:"Panda" },
+  { amiga:"Pache", q:"¿Cuál es su hobby favorito?",
+    opts:["Sacar fotos y estar con amigas","Comer y pasear","Armar rompecabezas","Leer novelas"],
+    correcta:"Sacar fotos y estar con amigas" },
+  { amiga:"Paez", q:"Si le dicen \"...\" ella es feliz. ¡Es lo único que le importa!",
+    opts:["Que flaca estás","Qué alta te ves hoy","¡Hermosos zapatos, son nuevos?","Tomate el día libre"],
+    correcta:"Que flaca estás" },
+  { amiga:"Paez", q:"¿Cómo compra los electrodomésticos de su casa?",
+    opts:["Sorteo","Prode","Instagram","Fravega"],
+    correcta:"Sorteo" },
+  { amiga:"Paola", q:"¿Qué tenía Paola, poco usada y amarilla, cerca de los 15 años?",
+    opts:["Bicicleta","Libro","Corneta","Zapatillas"],
+    correcta:"Bicicleta" },
+  { amiga:"Paola", q:"¿Cuál es la comida favorita que le hacía su abuela?",
+    opts:["Pollo al horno con papas","Empanadas","Ñoquis","Tarta de verduras"],
+    correcta:"Pollo al horno con papas" },
+  { amiga:"Pitu", q:"En su equipo de fútbol, ¿en qué posición juega?",
+    opts:["Defensora — última jugadora","Arquera","Volante por izquierda","Aguatera"],
+    correcta:"Defensora — última jugadora" },
+  { amiga:"Pitu", q:"¿Cuál es su gusto de helado preferido?",
+    opts:["Chocolate","Pistacho","Dulce de leche con nuez","Menta granizada"],
+    correcta:"Chocolate" },
+  { amiga:"Salvi", q:"¿Cuál es su comida favorita?",
+    opts:["Chatarra: lomo, hamburguesas grasosas con papas","Carnes magras","Verduras en todas sus versiones","Tartas de lo que sea","Asadito en parrilla eléctrica"],
+    correcta:"Chatarra: lomo, hamburguesas grasosas con papas" },
+  { amiga:"Salvi", q:"¿Cuál es su terapia nocturna?",
+    opts:["Copita de vino, sea la hora que sea","Meditar","Ejercicios de respiración","Poses de yoga con connotaciones sexuales"],
+    correcta:"Copita de vino, sea la hora que sea" },
+  { amiga:"Yemina", q:"¿Una de las cosas que más disfruta hacer?",
+    opts:["Un vinito y una linda charla con Juan o con sus amigas Palomas","Ordenar la casa y cocinar a diario","Ejercicio matutino","Comer helado"],
+    correcta:"Un vinito y una linda charla con Juan o con sus amigas Palomas" },
+  { amiga:"Yemina", q:"Ella es ansiosa... ¿Pero qué la destaca?",
+    opts:["Todos los anteriores","Buen ser humano","Buena anfitriona","Empática y simpática","Tiene comentarios súper acertados"],
+    correcta:"Todos los anteriores" },
+  { amiga:"Romina", q:"¿Cuál es su comida favorita?",
+    opts:["Tarta de Zapallitos","Lechuga en todas sus versiones y colores","Budín sin gluten con nueces y cacao","Asadito con achuras"],
+    correcta:"Tarta de Zapallitos" },
+  { amiga:"Romina", q:"¿Cuál es su prenda preferida?",
+    opts:["Stiletos","Calzas ajustadas y top","Sandalias de goma","Vestidos de veranito"],
+    correcta:"Stiletos" },
+];
+
+const ETAPA2 = [
+  { cat:"Mundiales", q:"¿Cuántas Copas del Mundo ganó la Selección Argentina hasta ahora?",
+    opts:["2","3","4","5"], correcta:"3" },
+  { cat:"Messi", q:"¿En qué año Messi ganó su primer Balón de Oro?",
+    opts:["2008","2009","2010","2011"], correcta:"2009" },
+  { cat:"Historia Argentina", q:"¿En qué año se produjo la Revolución de Mayo?",
+    opts:["1806","1810","1816","1820"], correcta:"1810" },
+  { cat:"Mundo", q:"¿Cuál es el río más largo del mundo?",
+    opts:["Río Amazonas","Río Nilo","Río Misisipi","Río Yangtsé"], correcta:"Río Amazonas" },
+  { cat:"Boca Juniors", q:"¿En qué barrio de Buenos Aires se fundó Boca Juniors?",
+    opts:["Once","La Boca","Caballito","Flores"], correcta:"La Boca" },
+  { cat:"Batman", q:"¿Cuál es el verdadero nombre del mayordomo de Batman?",
+    opts:["Lucius Fox","James Gordon","Alfred Pennyworth","Harvey Dent"], correcta:"Alfred Pennyworth" },
+  { cat:"Argentina / Mundiales", q:"¿En qué país se jugó el Mundial 1978, que Argentina ganó por primera vez?",
+    opts:["Brasil","Argentina","México","España"], correcta:"Argentina" },
+  { cat:"Mundiales", q:"¿Quién fue el máximo goleador del Mundial de Qatar 2022?",
+    opts:["Lionel Messi","Kylian Mbappé","Olivier Giroud","Julián Álvarez"], correcta:"Kylian Mbappé" },
+  { cat:"Messi", q:"¿De qué club argentino salió Messi antes de irse a Barcelona?",
+    opts:["River Plate","Newell's Old Boys","Independiente","Rosario Central"], correcta:"Newell's Old Boys" },
+  { cat:"Historia Argentina", q:"¿Quién fue el primer presidente constitucional de la Argentina?",
+    opts:["Bernardino Rivadavia","Justo José de Urquiza","Domingo F. Sarmiento","Bartolomé Mitre"], correcta:"Bernardino Rivadavia" },
+  { cat:"Mundo", q:"¿Cuál es el país más poblado del mundo actualmente?",
+    opts:["China","Estados Unidos","India","Indonesia"], correcta:"India" },
+  { cat:"Boca Juniors", q:"¿Cómo se llama el estadio de Boca Juniors?",
+    opts:["Monumental","La Bombonera","El Cilindro","Libertadores de América"], correcta:"La Bombonera" },
+  { cat:"Batman", q:"¿Cuál es el nombre real de Batman?",
+    opts:["Dick Grayson","Bruce Wayne","Tim Drake","Jason Todd"], correcta:"Bruce Wayne" },
+  { cat:"Argentina / Mundiales", q:"¿Contra qué país jugó y ganó Argentina la final del Mundial 2022?",
+    opts:["Croacia","Francia","Países Bajos","Marruecos"], correcta:"Francia" },
+];
+
+/* ══════════════════════════════════════════════
+   ESTADO
+══════════════════════════════════════════════ */
+let jugadora = "";
+let score = 0;
+let scoreE1 = 0;
+let scoreE2 = 0;
+let totalCorrectas = 0;
+let etapa = 1;       // 1 o 2
+let qIdx = 0;        // índice dentro de la etapa actual
+let qActual = null;  // pregunta mezclada activa
+let listaE1 = [];    // E1 mezclada
+let listaE2 = [];    // E2 mezclada
+
+/* ══════════════════════════════════════════════
+   UTILIDADES
+══════════════════════════════════════════════ */
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function shuffleOpts(pregunta) {
+  // Retorna una copia con opts mezcladas
+  return { ...pregunta, opts: shuffle(pregunta.opts) };
+}
+
+function toast(m, dur = 3000) {
+  const t = document.getElementById("tst");
+  t.textContent = m;
+  t.classList.add("on");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove("on"), dur);
+}
+
+function actualizarHeader() {
+  document.getElementById("hdrName").textContent = jugadora;
+  document.getElementById("hdrScore").textContent = score;
+}
+
+function mostrar(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("act"));
+  document.getElementById(id).classList.add("act");
+}
+
+/* ══════════════════════════════════════════════
+   INICIO
+══════════════════════════════════════════════ */
+const niInput = document.getElementById("ni");
+const btnStart = document.getElementById("btnStart");
+
+niInput.addEventListener("input", () => {
+  btnStart.disabled = niInput.value.trim().length === 0;
+});
+niInput.addEventListener("keydown", e => { if (e.key === "Enter") iniciarJuego(); });
+
+function iniciarJuego() {
+  const v = niInput.value.trim();
+  if (!v) { toast("Ingresá tu nombre"); niInput.focus(); return; }
+  jugadora = v;
+  score = 0; scoreE1 = 0; scoreE2 = 0; totalCorrectas = 0;
+  etapa = 1; qIdx = 0;
+  listaE1 = shuffle(ETAPA1).map(shuffleOpts);
+  listaE2 = shuffle(ETAPA2).map(shuffleOpts);
+  document.getElementById("hdr").classList.add("on");
+  actualizarHeader();
+  mostrar("scJuego");
+  mostrarPregunta();
+}
+
+/* ══════════════════════════════════════════════
+   LÓGICA DE PREGUNTAS
+══════════════════════════════════════════════ */
+function mostrarPregunta() {
+  const lista = etapa === 1 ? listaE1 : listaE2;
+  const total = lista.length;
+  qActual = lista[qIdx];
+
+  // Badge de etapa
+  const badge = document.getElementById("stageBadge");
+  if (etapa === 1) {
+    badge.className = "stage-badge";
+    badge.textContent = "⭐ Etapa 1 · Trivia de Amigas";
+  } else {
+    badge.className = "stage-badge stage2";
+    badge.textContent = "🏆 Etapa 2 · Trivia General";
+  }
+
+  // Progreso
+  const num = qIdx + 1;
+  const pct = Math.round(qIdx / total * 100);
+  document.getElementById("pgNum").textContent = num;
+  document.getElementById("pgOf").textContent = total;
+  document.getElementById("pgPct").textContent = pct + "%";
+  document.getElementById("pgf").style.width = pct + "%";
+
+  // Amiga tag
+  const tag = document.getElementById("amigaTag");
+  if (etapa === 1) {
+    tag.style.display = "inline-block";
+    tag.textContent = "👩 " + qActual.amiga;
+  } else {
+    tag.style.display = "none";
+  }
+
+  // Pregunta
+  document.getElementById("qText").textContent = qActual.q;
+
+  // Opciones
+  const optsDiv = document.getElementById("opts");
+  optsDiv.innerHTML = "";
+  qActual.opts.forEach(op => {
+    const btn = document.createElement("button");
+    btn.className = "opt";
+    btn.textContent = op;
+    btn.onclick = () => responder(op, btn);
+    optsDiv.appendChild(btn);
+  });
+
+  // Reset feedback y siguiente
+  const fb = document.getElementById("feedback");
+  fb.className = "feedback";
+  fb.textContent = "";
+  document.getElementById("btnNext").style.display = "none";
+
+  // Scroll al top
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function responder(opcion, btnPulsado) {
+  const esCorrecta = opcion === qActual.correcta;
+
+  // Deshabilitar todos los botones (anti-doble-tap)
+  const todos = document.querySelectorAll(".opt");
+  todos.forEach(b => {
+    b.disabled = true;
+    if (b.textContent === qActual.correcta) {
+      b.classList.add("correct");
+    } else if (b === btnPulsado && !esCorrecta) {
+      b.classList.add("wrong");
+    } else {
+      b.classList.add("dim");
+    }
+  });
+
+  // Feedback
+  const fb = document.getElementById("feedback");
+  if (esCorrecta) {
+    fb.className = "feedback ok on";
+    fb.textContent = "✅ ¡Correcto! +10 puntos";
+    if (etapa === 1) { score += 10; scoreE1 += 10; }
+    else             { score += 10; scoreE2 += 10; }
+    totalCorrectas++;
+  } else {
+    if (etapa === 1) {
+      fb.className = "feedback err on";
+      fb.textContent = "❌ Incorrecto — la correcta era: " + qActual.correcta;
+    } else {
+      score = Math.max(0, score - 5);
+      scoreE2 = Math.max(0, scoreE2 - 5);
+      fb.className = "feedback err on";
+      fb.textContent = "❌ Incorrecto (−5 pts) — la correcta era: " + qActual.correcta;
+    }
+  }
+
+  actualizarHeader();
+  document.getElementById("btnNext").style.display = "flex";
+}
+
+function siguiente() {
+  const lista = etapa === 1 ? listaE1 : listaE2;
+  qIdx++;
+
+  if (qIdx >= lista.length) {
+    // Fin de etapa
+    if (etapa === 1) {
+      document.getElementById("scoreEtapa1").textContent = scoreE1 + " pts";
+      mostrar("scTrans");
+    } else {
+      mostrarFinal();
+    }
+  } else {
+    mostrarPregunta();
+  }
+}
+
+function iniciarEtapa2() {
+  etapa = 2;
+  qIdx = 0;
+  mostrar("scJuego");
+  mostrarPregunta();
+}
+
+/* ══════════════════════════════════════════════
+   FINAL
+══════════════════════════════════════════════ */
+function mostrarFinal() {
+  document.getElementById("finalName").textContent = jugadora;
+  document.getElementById("finalScore").textContent = score;
+  document.getElementById("finalS1").textContent = scoreE1 + " pts";
+  document.getElementById("finalS2").textContent = scoreE2 + " pts";
+  document.getElementById("finalCorr").textContent = totalCorrectas + "/" + (ETAPA1.length + ETAPA2.length);
+  document.getElementById("hdr").classList.remove("on");
+  mostrar("scFinal");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  lanzarConfeti();
+}
+
+function compartirWA() {
+  const msg = encodeURIComponent(
+    "🕊️ *¡Terminé la Trivia de Palomas!*\n\n" +
+    "👤 Mi nombre: *" + jugadora + "*\n" +
+    "🏆 Puntaje total: *" + score + " puntos*\n" +
+    "   ⭐ Etapa 1 (Amigas): " + scoreE1 + " pts\n" +
+    "   🏅 Etapa 2 (General): " + scoreE2 + " pts\n" +
+    "   ✅ Respuestas correctas: " + totalCorrectas + "/" + (ETAPA1.length + ETAPA2.length) + "\n\n" +
+    "¡Sumame al Ranking! 💜"
+  );
+  window.open("https://api.whatsapp.com/send?text=" + msg, "_blank");
+}
+
+function descargarPDF() {
+  const btn = document.getElementById("btnPDF");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="sp"></span> Generando...';
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const W = doc.internal.pageSize.getWidth();
+
+    // Fondo
+    doc.setFillColor(26, 16, 53);
+    doc.rect(0, 0, W, 297, "F");
+
+    // Borde decorativo
+    doc.setDrawColor(247, 37, 133);
+    doc.setLineWidth(1);
+    doc.rect(10, 10, W - 20, 277);
+    doc.setLineWidth(0.5);
+    doc.setDrawColor(255, 214, 10);
+    doc.rect(13, 13, W - 26, 271);
+
+    // Título
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(28);
+    doc.setTextColor(255, 214, 10);
+    doc.text("Trivia de Palomas", W / 2, 40, { align: "center" });
+
+    doc.setFontSize(14);
+    doc.setTextColor(247, 37, 133);
+    doc.text("Certificado de Participación", W / 2, 52, { align: "center" });
+
+    // Emoji simulado con texto
+    doc.setFontSize(36);
+    doc.text("🏆", W / 2, 75, { align: "center" });
+
+    // Nombre
+    doc.setFontSize(11);
+    doc.setTextColor(160, 140, 192);
+    doc.text("Este certificado se otorga a", W / 2, 92, { align: "center" });
+
+    doc.setFontSize(24);
+    doc.setTextColor(240, 230, 255);
+    doc.setFont("helvetica", "bold");
+    doc.text(jugadora, W / 2, 106, { align: "center" });
+
+    // Línea decorativa
+    doc.setDrawColor(247, 37, 133);
+    doc.setLineWidth(0.8);
+    doc.line(30, 112, W - 30, 112);
+
+    // Puntaje
+    doc.setFontSize(13);
+    doc.setTextColor(160, 140, 192);
+    doc.text("por haber completado la Trivia con un puntaje de", W / 2, 124, { align: "center" });
+
+    doc.setFontSize(42);
+    doc.setTextColor(255, 214, 10);
+    doc.text(score + " pts", W / 2, 145, { align: "center" });
+
+    // Desglose
+    doc.setFontSize(11);
+    doc.setTextColor(160, 140, 192);
+    doc.text("Etapa 1 — Trivia de Amigas:   " + scoreE1 + " puntos", W / 2, 162, { align: "center" });
+    doc.text("Etapa 2 — Trivia General:       " + scoreE2 + " puntos", W / 2, 172, { align: "center" });
+    doc.text("Respuestas correctas:             " + totalCorrectas + " de " + (ETAPA1.length + ETAPA2.length), W / 2, 182, { align: "center" });
+
+    // Línea
+    doc.setDrawColor(255, 214, 10);
+    doc.setLineWidth(0.5);
+    doc.line(30, 190, W - 30, 190);
+
+    // Frase motivadora
+    const frases = [
+      "¡Sos una crack de la trivia! 💜",
+      "¡Conocés a tus amigas mejor que nadie! 🕊️",
+      "¡Una verdadera Paloma! 🌟",
+      "¡Brillaste en la Trivia! ✨",
+    ];
+    const frase = frases[Math.min(Math.floor(score / 70), frases.length - 1)];
+    doc.setFontSize(14);
+    doc.setTextColor(247, 37, 133);
+    doc.setFont("helvetica", "bold");
+    doc.text(frase, W / 2, 205, { align: "center" });
+
+    // Pie
+    doc.setFontSize(9);
+    doc.setTextColor(100, 85, 140);
+    const fecha = new Date().toLocaleDateString("es-AR", { year: "numeric", month: "long", day: "numeric" });
+    doc.text(fecha, W / 2, 260, { align: "center" });
+    doc.text("Trivia de Palomas — ¡La noche más divertida! 🕊️", W / 2, 268, { align: "center" });
+
+    // Guardar — compatible iOS/Android
+    const pdfName = "trivia_palomas_" + jugadora.replace(/\s+/g, "_") + ".pdf";
+    const ua = navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(ua);
+
+    if (isIOS) {
+      // iOS Safari: abrir en nueva pestaña (el usuario puede guardar desde ahí)
+      window.open(doc.output("bloburl"), "_blank");
+      toast("📄 El PDF se abrió en nueva pestaña. Tocá compartir para guardarlo.", 5000);
+    } else {
+      // Android/Desktop: descarga directa
+      doc.save(pdfName);
+      toast("✅ Certificado descargado");
+    }
+  } catch (e) {
+    toast("Error al generar PDF: " + e.message);
+    console.error(e);
+  } finally {
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.innerHTML = "🏅 Descargar mi Certificado (PDF)";
+    }, 2000);
+  }
+}
+
+function reiniciar() {
+  score = 0; scoreE1 = 0; scoreE2 = 0; totalCorrectas = 0;
+  etapa = 1; qIdx = 0;
+  document.getElementById("ni").value = "";
+  btnStart.disabled = true;
+  document.getElementById("hdr").classList.remove("on");
+  mostrar("scIntro");
+  window.scrollTo({ top: 0 });
+}
+
+/* ══════════════════════════════════════════════
+   PARTÍCULAS
+══════════════════════════════════════════════ */
+(function () {
+  const cv = document.getElementById("cv");
+  const cx = cv.getContext("2d");
+  const cl = ["#f72585", "#ffd60a", "#7209b7", "#a855f7", "#06d6a0"];
+  let ps = [];
+  function rsz() { cv.width = innerWidth; cv.height = innerHeight; }
+  rsz();
+  window.addEventListener("resize", rsz);
+  function rnd(a, b) { return Math.random() * (b - a) + a; }
+  function mk() { return { x: rnd(0, cv.width), y: cv.height + 8, r: rnd(1.5, 4), s: rnd(0.4, 1.5), c: cl[Math.floor(Math.random() * cl.length)], pk: rnd(0.3, 0.7) }; }
+  function fr() {
+    cx.clearRect(0, 0, cv.width, cv.height);
+    while (ps.length < 30) ps.push(mk());
+    ps = ps.filter(p => {
+      p.y -= p.s;
+      const g = (cv.height - p.y) / cv.height;
+      const a = g < p.pk ? g / p.pk * 0.4 : (1 - (g - p.pk) / (1 - p.pk)) * 0.4;
+      cx.globalAlpha = Math.max(0, a);
+      cx.fillStyle = p.c;
+      cx.beginPath();
+      cx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      cx.fill();
+      return p.y > -15;
+    });
+    cx.globalAlpha = 1;
+    requestAnimationFrame(fr);
+  }
+  fr();
+})();
+
+/* ══════════════════════════════════════════════
+   CONFETI FINAL
+══════════════════════════════════════════════ */
+function lanzarConfeti() {
+  const cv = document.getElementById("cv");
+  const cx = cv.getContext("2d");
+  const pieces = Array.from({ length: 80 }, () => ({
+    x: Math.random() * cv.width,
+    y: Math.random() * -200,
+    r: Math.random() * 6 + 3,
+    d: Math.random() * 80 + 20,
+    c: ["#f72585","#ffd60a","#7209b7","#06d6a0","#a855f7","#fb8500"][Math.floor(Math.random() * 6)],
+    vy: Math.random() * 3 + 2,
+    vx: (Math.random() - 0.5) * 2,
+    tilt: Math.random() * 10 - 5,
+    tiltSpd: (Math.random() - 0.5) * 0.4,
+    life: 1,
+  }));
+  let frames = 0;
+  function draw() {
+    if (frames++ > 180) return;
+    cx.clearRect(0, 0, cv.width, cv.height);
+    pieces.forEach(p => {
+      p.y += p.vy; p.x += p.vx; p.tilt += p.tiltSpd;
+      p.life = Math.max(0, 1 - frames / 180);
+      cx.globalAlpha = p.life * 0.8;
+      cx.fillStyle = p.c;
+      cx.beginPath();
+      cx.ellipse(p.x, p.y, p.r, p.r / 2, p.tilt, 0, Math.PI * 2);
+      cx.fill();
+    });
+    cx.globalAlpha = 1;
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+</script>
+</body>
+</html>
