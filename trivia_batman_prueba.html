@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Trivia Batman 🦇</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0f;--card:#12121a;--yl:#f5c518;--bl:#1a1aff;
+  --tx:#e8e8ff;--mu:#7070a0;--green:#00e676;--red:#ff1744;
+}
+body{
+  background:var(--bg);color:var(--tx);
+  font-family:'Segoe UI',Arial,sans-serif;
+  min-height:100vh;overflow-x:hidden;
+  -webkit-tap-highlight-color:transparent;
+}
+
+/* CIUDAD GOTHAM DE FONDO */
+#city{position:fixed;bottom:0;left:0;width:100%;height:45%;pointer-events:none;z-index:0;opacity:.18}
+#city svg{width:100%;height:100%}
+
+/* BAT-SEÑAL */
+#batsignal{
+  position:fixed;top:-80px;left:50%;transform:translateX(-50%);
+  width:220px;height:220px;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse at center, rgba(245,197,24,.08) 0%, transparent 70%);
+  animation:pulse 3s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{opacity:.5;transform:translateX(-50%) scale(1)}50%{opacity:1;transform:translateX(-50%) scale(1.1)}}
+
+.wrap{
+  position:relative;z-index:1;
+  max-width:500px;margin:0 auto;
+  padding:20px 14px 60px;
+}
+.screen{display:none;animation:fadeIn .3s ease}
+.screen.act{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* HEADER */
+#hdr{
+  position:sticky;top:0;z-index:50;
+  background:rgba(10,10,15,.95);
+  backdrop-filter:blur(10px);
+  border-bottom:2px solid var(--yl);
+  padding:10px 16px;
+  display:none;justify-content:space-between;align-items:center;
+}
+#hdr.on{display:flex}
+.hdr-name{font-size:.82rem;color:var(--mu)}
+.hdr-name b{color:var(--tx);display:block;font-size:.95rem}
+.hdr-score span{font-size:1.5rem;font-weight:900;color:var(--yl);display:block;line-height:1;text-align:right}
+.hdr-score small{font-size:.65rem;color:var(--mu);text-transform:uppercase}
+
+/* CARD */
+.card{
+  background:var(--card);
+  border-radius:4px;padding:26px 20px;
+  border:2px solid rgba(245,197,24,.3);
+  box-shadow:0 0 40px rgba(245,197,24,.08), 0 8px 32px rgba(0,0,0,.8);
+  margin-bottom:16px;
+  position:relative;overflow:hidden;
+}
+.card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,transparent,var(--yl),transparent);
+}
+
+/* INTRO */
+.bat-emoji{font-size:5rem;text-align:center;display:block;margin-bottom:8px;animation:bat .6s ease-in-out infinite alternate}
+@keyframes bat{from{transform:translateY(0) rotate(-3deg)}to{transform:translateY(-8px) rotate(3deg)}}
+
+h1{
+  font-size:2.2rem;font-weight:900;text-align:center;letter-spacing:2px;
+  text-transform:uppercase;
+  color:var(--yl);
+  text-shadow:0 0 20px rgba(245,197,24,.5);
+  margin-bottom:4px;
+}
+.sub{text-align:center;color:var(--mu);font-size:.88rem;margin-bottom:20px;line-height:1.6}
+label{display:block;font-size:.7rem;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+input[type=text]{
+  width:100%;background:rgba(255,255,255,.05);
+  border:2px solid rgba(245,197,24,.3);border-radius:4px;
+  padding:14px 16px;color:var(--tx);font-size:17px;
+  font-family:'Segoe UI',Arial,sans-serif;outline:none;
+  transition:border-color .2s,box-shadow .2s;-webkit-appearance:none;
+}
+input[type=text]:focus{border-color:var(--yl);box-shadow:0 0 0 3px rgba(245,197,24,.15)}
+input::placeholder{color:rgba(112,112,160,.5)}
+
+/* BUTTONS */
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;padding:16px;border-radius:4px;border:none;
+  font-family:'Segoe UI',Arial,sans-serif;font-size:1rem;font-weight:800;
+  cursor:pointer;color:#000;transition:opacity .2s,transform .1s;
+  -webkit-appearance:none;touch-action:manipulation;
+  background:var(--yl);
+  box-shadow:0 4px 20px rgba(245,197,24,.3);
+  text-transform:uppercase;letter-spacing:1px;
+  margin-top:12px;
+}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn-wa{background:#25d366;color:#fff;box-shadow:0 4px 20px rgba(37,211,102,.3)}
+.btn-ghost{background:transparent;border:2px solid rgba(245,197,24,.3);color:var(--yl);box-shadow:none;margin-top:8px}
+
+/* PROGRESS */
+.pgw{margin-bottom:18px}
+.pg-info{display:flex;justify-content:space-between;font-size:.75rem;color:var(--mu);margin-bottom:6px}
+.pg-info b{color:var(--yl)}
+.pgt{background:rgba(255,255,255,.07);border-radius:0;height:4px}
+.pgf{height:100%;background:var(--yl);transition:width .4s ease;box-shadow:0 0 8px rgba(245,197,24,.6)}
+
+/* QUESTION */
+.q-num{
+  font-size:.7rem;font-weight:800;color:var(--yl);
+  text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;
+}
+.q-text{
+  font-size:1.1rem;font-weight:700;line-height:1.5;
+  color:var(--tx);margin-bottom:22px;
+}
+
+/* OPTIONS */
+.opts{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.opt{
+  width:100%;padding:14px 16px;border-radius:4px;
+  border:2px solid rgba(245,197,24,.2);
+  background:rgba(255,255,255,.03);color:var(--tx);
+  font-size:.97rem;font-weight:600;
+  font-family:'Segoe UI',Arial,sans-serif;text-align:left;
+  cursor:pointer;transition:all .15s;
+  -webkit-appearance:none;touch-action:manipulation;line-height:1.4;
+}
+.opt:hover:not(:disabled){background:rgba(245,197,24,.08);border-color:rgba(245,197,24,.5)}
+.opt:active:not(:disabled){transform:scale(.98)}
+.opt:disabled{cursor:not-allowed}
+.opt.correct{background:rgba(0,230,118,.12)!important;border-color:var(--green)!important;color:var(--green)!important;font-weight:800}
+.opt.wrong{background:rgba(255,23,68,.12)!important;border-color:var(--red)!important;color:#ff6b7a!important}
+.opt.dim{opacity:.35}
+
+/* FEEDBACK */
+.feedback{
+  border-radius:4px;padding:12px 16px;font-size:.9rem;font-weight:700;
+  text-align:center;margin-bottom:14px;display:none;line-height:1.5;
+}
+.feedback.on{display:block}
+.feedback.ok{background:rgba(0,230,118,.1);border:2px solid rgba(0,230,118,.4);color:var(--green)}
+.feedback.err{background:rgba(255,23,68,.1);border:2px solid rgba(255,23,68,.4);color:#ff6b7a}
+
+/* FINAL */
+.score-display{
+  background:rgba(245,197,24,.06);border:2px solid rgba(245,197,24,.4);
+  border-radius:4px;padding:24px;text-align:center;margin:16px 0;
+}
+.score-total{font-size:4rem;font-weight:900;color:var(--yl);display:block;line-height:1;text-shadow:0 0 30px rgba(245,197,24,.4)}
+.score-label{font-size:.75rem;color:var(--mu);text-transform:uppercase;letter-spacing:.08em;margin-top:4px}
+.rank-badge{
+  font-size:1rem;font-weight:800;text-transform:uppercase;letter-spacing:2px;
+  color:#000;background:var(--yl);padding:8px 20px;
+  display:inline-block;border-radius:2px;margin:12px 0;
+}
+
+/* TOAST */
+#tst{
+  position:fixed;bottom:24px;left:50%;
+  transform:translateX(-50%) translateY(100px);
+  background:var(--card);border:2px solid var(--yl);
+  color:var(--tx);padding:12px 22px;border-radius:4px;
+  font-weight:700;font-size:.88rem;z-index:999;
+  transition:transform .3s;white-space:nowrap;max-width:92vw;text-align:center;
+}
+#tst.on{transform:translateX(-50%) translateY(0)}
+.sp{display:inline-block;width:16px;height:16px;border:3px solid rgba(0,0,0,.3);border-top-color:#000;border-radius:50%;animation:rot .7s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- CIUDAD GOTHAM -->
+<div id="city">
+<svg viewBox="0 0 800 200" preserveAspectRatio="xMidYMax meet" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="80" width="60" height="120" fill="#e8e8ff"/>
+  <rect x="20" y="60" width="20" height="20" fill="#e8e8ff"/>
+  <rect x="80" y="40" width="80" height="160" fill="#e8e8ff"/>
+  <rect x="100" y="20" width="40" height="20" fill="#e8e8ff"/>
+  <rect x="110" y="5" width="20" height="15" fill="#e8e8ff"/>
+  <rect x="180" y="70" width="50" height="130" fill="#e8e8ff"/>
+  <rect x="250" y="30" width="70" height="170" fill="#e8e8ff"/>
+  <rect x="265" y="10" width="40" height="20" fill="#e8e8ff"/>
+  <rect x="340" y="60" width="40" height="140" fill="#e8e8ff"/>
+  <rect x="400" y="20" width="90" height="180" fill="#e8e8ff"/>
+  <rect x="415" y="0" width="60" height="20" fill="#e8e8ff"/>
+  <rect x="430" y="-10" width="30" height="10" fill="#e8e8ff"/>
+  <rect x="510" y="50" width="55" height="150" fill="#e8e8ff"/>
+  <rect x="585" y="35" width="75" height="165" fill="#e8e8ff"/>
+  <rect x="600" y="15" width="45" height="20" fill="#e8e8ff"/>
+  <rect x="680" y="65" width="50" height="135" fill="#e8e8ff"/>
+  <rect x="750" y="45" width="50" height="155" fill="#e8e8ff"/>
+  <!-- ventanas -->
+  <rect x="90" y="50" width="8" height="8" fill="#f5c518" opacity=".6"/>
+  <rect x="105" y="50" width="8" height="8" fill="#f5c518" opacity=".4"/>
+  <rect x="260" y="40" width="8" height="8" fill="#f5c518" opacity=".7"/>
+  <rect x="410" y="30" width="8" height="8" fill="#f5c518" opacity=".5"/>
+  <rect x="450" y="30" width="8" height="8" fill="#f5c518" opacity=".8"/>
+  <rect x="595" y="45" width="8" height="8" fill="#f5c518" opacity=".6"/>
+  <rect x="755" y="55" width="8" height="8" fill="#f5c518" opacity=".5"/>
+</svg>
+</div>
+
+<div id="batsignal"></div>
+
+<div id="hdr">
+  <div class="hdr-name">Detective<b id="hdrName">—</b></div>
+  <div class="hdr-score"><span id="hdrScore">0</span><small>puntos</small></div>
+</div>
+
+<div class="wrap">
+
+  <!-- INTRO -->
+  <div id="scIntro" class="screen act">
+    <div class="card" style="text-align:center">
+      <span class="bat-emoji">🦇</span>
+      <h1>Batman Trivia</h1>
+      <p class="sub">5 preguntas · ¿Sos digna de Gotham?</p>
+      <div style="text-align:left;margin-bottom:4px">
+        <label>Tu nombre, Detective</label>
+        <input id="ni" type="text" placeholder="Ej: Valentina" maxlength="30" autocomplete="off" autocorrect="off" spellcheck="false">
+      </div>
+      <button class="btn" id="btnStart" onclick="iniciar()" disabled>
+        🦇 Iniciar Misión
+      </button>
+      <div style="margin-top:18px;padding:12px;background:rgba(245,197,24,.05);border:1px solid rgba(245,197,24,.15);border-radius:4px">
+        <p style="font-size:.78rem;color:var(--mu);line-height:1.8">
+          ✅ Respuesta correcta: <b style="color:var(--green)">+10 pts</b><br>
+          ❌ Respuesta incorrecta: <b style="color:var(--red)">−5 pts</b><br>
+          🏆 Puntaje mínimo: <b style="color:var(--yl)">0 pts</b>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- JUEGO -->
+  <div id="scJuego" class="screen">
+    <div class="card">
+      <div class="pgw">
+        <div class="pg-info">
+          <span>Pregunta <b id="pgNum">1</b> de <b>5</b></span>
+          <span id="pgPct" style="color:var(--yl)">0%</span>
+        </div>
+        <div class="pgt"><div class="pgf" id="pgf" style="width:0%"></div></div>
+      </div>
+      <div class="q-num" id="qNum">🦇 Pregunta 1</div>
+      <div class="q-text" id="qText"></div>
+      <div class="opts" id="opts"></div>
+      <div class="feedback" id="feedback"></div>
+      <button class="btn" id="btnNext" onclick="siguiente()" style="display:none">
+        Siguiente →
+      </button>
+    </div>
+  </div>
+
+  <!-- FINAL -->
+  <div id="scFinal" class="screen">
+    <div class="card" style="text-align:center;padding:28px 20px">
+      <div style="font-size:3rem;margin-bottom:8px">🦇</div>
+      <h1 style="font-size:1.5rem;margin-bottom:4px">Misión completada</h1>
+      <p style="color:var(--mu);font-size:.9rem;margin-bottom:4px">Resultado de <b id="finalName" style="color:var(--tx)"></b>:</p>
+
+      <div class="score-display">
+        <span class="score-total" id="finalScore">—</span>
+        <div class="score-label">puntos de 50 posibles</div>
+        <div id="rankBadge" class="rank-badge" style="margin-top:14px"></div>
+      </div>
+
+      <p style="font-size:.85rem;color:var(--mu);margin:12px 0 16px;line-height:1.6">
+        Mandá tu puntaje a la organizadora para el ranking 🦇
+      </p>
+
+      <button class="btn btn-wa" onclick="compartirWA()">
+        💬 Enviar puntaje por WhatsApp
+      </button>
+      <button class="btn" onclick="descargarPDF()" id="btnPDF" style="margin-top:10px">
+        🏅 Descargar Certificado
+      </button>
+      <button class="btn btn-ghost" onclick="reiniciar()">
+        🔄 Jugar de nuevo
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<div id="tst"></div>
+
+<script>
+const PREGUNTAS = [
+  {
+    q: "¿Cuál es el nombre real de Batman?",
+    opts: ["Dick Grayson","Bruce Wayne","Tim Drake","Jason Todd"],
+    correcta: "Bruce Wayne"
+  },
+  {
+    q: "¿Cómo se llama la ciudad donde protege Batman?",
+    opts: ["Metrópolis","Star City","Central City","Gotham City"],
+    correcta: "Gotham City"
+  },
+  {
+    q: "¿Cuál es el verdadero nombre del mayordomo Alfred?",
+    opts: ["Alfred Thaddeus","Alfred Pennyworth","Alfred Wayne","Alfred Gordon"],
+    correcta: "Alfred Pennyworth"
+  },
+  {
+    q: "¿Cuál es el enemigo más icónico de Batman?",
+    opts: ["Dos Caras","El Acertijo","El Joker","El Pingüino"],
+    correcta: "El Joker"
+  },
+  {
+    q: "¿En qué año se estrenó 'Batman' con Michael Keaton?",
+    opts: ["1985","1987","1989","1991"],
+    correcta: "1989"
+  },
+];
+
+let jugadora = "", score = 0, qIdx = 0, lista = [], totalCorrectas = 0;
+
+function shuffle(arr){
+  const a=arr.slice();
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
+  return a;
+}
+function toast(m){
+  const t=document.getElementById("tst");
+  t.textContent=m;t.classList.add("on");
+  clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove("on"),3000);
+}
+function mostrar(id){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("act"));
+  document.getElementById(id).classList.add("act");
+}
+
+const ni=document.getElementById("ni");
+const btnStart=document.getElementById("btnStart");
+ni.addEventListener("input",()=>btnStart.disabled=ni.value.trim().length===0);
+ni.addEventListener("keydown",e=>{if(e.key==="Enter")iniciar();});
+
+function iniciar(){
+  const v=ni.value.trim();
+  if(!v){toast("Ingresá tu nombre");ni.focus();return;}
+  jugadora=v; score=0; qIdx=0; totalCorrectas=0;
+  lista=shuffle(PREGUNTAS).map(p=>({...p,opts:shuffle(p.opts)}));
+  document.getElementById("hdr").classList.add("on");
+  document.getElementById("hdrName").textContent=jugadora;
+  document.getElementById("hdrScore").textContent=0;
+  mostrar("scJuego");
+  mostrarPregunta();
+}
+
+function mostrarPregunta(){
+  const p=lista[qIdx];
+  const pct=Math.round(qIdx/lista.length*100);
+  document.getElementById("pgNum").textContent=qIdx+1;
+  document.getElementById("pgPct").textContent=pct+"%";
+  document.getElementById("pgf").style.width=pct+"%";
+  document.getElementById("qNum").textContent="🦇 Pregunta "+(qIdx+1);
+  document.getElementById("qText").textContent=p.q;
+
+  const optsDiv=document.getElementById("opts");
+  optsDiv.innerHTML="";
+  p.opts.forEach(op=>{
+    const b=document.createElement("button");
+    b.className="opt"; b.textContent=op;
+    b.onclick=()=>responder(op,b,p.correcta);
+    optsDiv.appendChild(b);
+  });
+
+  const fb=document.getElementById("feedback");
+  fb.className="feedback"; fb.textContent="";
+  document.getElementById("btnNext").style.display="none";
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+function responder(op,btn,correcta){
+  document.querySelectorAll(".opt").forEach(b=>{
+    b.disabled=true;
+    if(b.textContent===correcta) b.classList.add("correct");
+    else if(b===btn&&op!==correcta) b.classList.add("wrong");
+    else b.classList.add("dim");
+  });
+  const fb=document.getElementById("feedback");
+  if(op===correcta){
+    score+=10; totalCorrectas++;
+    fb.className="feedback ok on";
+    fb.textContent="✅ ¡Correcto! +10 puntos";
+  } else {
+    score=Math.max(0,score-5);
+    fb.className="feedback err on";
+    fb.textContent="❌ Incorrecto (−5 pts) — era: "+correcta;
+  }
+  document.getElementById("hdrScore").textContent=score;
+  document.getElementById("btnNext").style.display="flex";
+}
+
+function siguiente(){
+  qIdx++;
+  if(qIdx>=lista.length) mostrarFinal();
+  else mostrarPregunta();
+}
+
+function getRango(){
+  if(score===50) return {texto:"🦇 BATMAN NIVEL GOD",color:"#f5c518"};
+  if(score>=40)  return {texto:"🦇 DETECTIVE ÉLITE",color:"#f5c518"};
+  if(score>=30)  return {texto:"🦇 COMISIONADO GORDON",color:"#aaa"};
+  if(score>=20)  return {texto:"🦇 CIUDADANA DE GOTHAM",color:"#cd7f32"};
+  return          {texto:"🦇 NECESITÁS ESTUDIAR MÁS",color:"#ff4444"};
+}
+
+function mostrarFinal(){
+  document.getElementById("finalName").textContent=jugadora;
+  document.getElementById("finalScore").textContent=score;
+  const r=getRango();
+  const badge=document.getElementById("rankBadge");
+  badge.textContent=r.texto; badge.style.background=r.color;
+  if(r.color==="#f5c518") badge.style.color="#000";
+  else badge.style.color="#fff";
+  document.getElementById("hdr").classList.remove("on");
+  mostrar("scFinal");
+  window.scrollTo({top:0});
+}
+
+function compartirWA(){
+  const r=getRango();
+  const msg=encodeURIComponent(
+    "🦇 *¡Terminé la Trivia Batman!*\n\n"+
+    "👤 "+jugadora+"\n"+
+    "🏆 Puntaje: *"+score+" / 50 pts*\n"+
+    "✅ Correctas: "+totalCorrectas+" de 5\n"+
+    "🎖️ Rango: "+r.texto+"\n\n"+
+    "¡Sumame al Ranking de Palomas! 🕊️"
+  );
+  window.open("https://api.whatsapp.com/send?text="+msg,"_blank");
+}
+
+function descargarPDF(){
+  const btn=document.getElementById("btnPDF");
+  btn.disabled=true;
+  btn.innerHTML='<span class="sp"></span> Generando...';
+  try{
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+    const W=doc.internal.pageSize.getWidth();
+
+    // Fondo negro
+    doc.setFillColor(10,10,15);
+    doc.rect(0,0,W,297,"F");
+
+    // Borde amarillo
+    doc.setDrawColor(245,197,24);
+    doc.setLineWidth(2);
+    doc.rect(8,8,W-16,281);
+    doc.setLineWidth(0.5);
+    doc.rect(12,12,W-24,273);
+
+    // Título
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(32);
+    doc.setTextColor(245,197,24);
+    doc.text("BATMAN TRIVIA",W/2,42,{align:"center"});
+
+    doc.setFontSize(12);
+    doc.setTextColor(100,100,120);
+    doc.text("Certificado de Detective",W/2,52,{align:"center"});
+
+    // Bat-symbol texto
+    doc.setFontSize(48);
+    doc.text("🦇",W/2,78,{align:"center"});
+
+    // Nombre
+    doc.setFontSize(11);
+    doc.setTextColor(100,100,130);
+    doc.text("Este certificado se otorga al detective",W/2,94,{align:"center"});
+    doc.setFontSize(26);
+    doc.setTextColor(232,232,255);
+    doc.text(jugadora,W/2,108,{align:"center"});
+
+    // Línea
+    doc.setDrawColor(245,197,24);
+    doc.setLineWidth(0.8);
+    doc.line(25,114,W-25,114);
+
+    // Puntaje
+    doc.setFontSize(13);
+    doc.setTextColor(100,100,130);
+    doc.text("por haber obtenido un puntaje de",W/2,126,{align:"center"});
+    doc.setFontSize(50);
+    doc.setTextColor(245,197,24);
+    doc.text(score+" pts",W/2,148,{align:"center"});
+    doc.setFontSize(11);
+    doc.setTextColor(100,100,130);
+    doc.text("de 50 puntos posibles  ·  "+totalCorrectas+" respuestas correctas de 5",W/2,160,{align:"center"});
+
+    // Rango
+    doc.setLineWidth(0.5);
+    doc.line(25,168,W-25,168);
+    const r=getRango();
+    doc.setFontSize(16);
+    doc.setTextColor(245,197,24);
+    doc.text(r.texto,W/2,182,{align:"center"});
+
+    // Pie
+    doc.setFontSize(9);
+    doc.setTextColor(60,60,80);
+    const fecha=new Date().toLocaleDateString("es-AR",{year:"numeric",month:"long",day:"numeric"});
+    doc.text(fecha,W/2,262,{align:"center"});
+    doc.text("Gotham City siempre necesita buenos detectives 🦇",W/2,270,{align:"center"});
+
+    const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
+    if(isIOS){
+      window.open(doc.output("bloburl"),"_blank");
+      toast("📄 PDF abierto en nueva pestaña. Tocá compartir para guardarlo.",5000);
+    } else {
+      doc.save("batman_trivia_"+jugadora.replace(/\s+/g,"_")+".pdf");
+      toast("✅ Certificado descargado");
+    }
+  } catch(e){
+    toast("Error: "+e.message);
+  } finally {
+    setTimeout(()=>{
+      btn.disabled=false;
+      btn.innerHTML="🏅 Descargar Certificado";
+    },2000);
+  }
+}
+
+function reiniciar(){
+  score=0; qIdx=0; totalCorrectas=0;
+  ni.value=""; btnStart.disabled=true;
+  document.getElementById("hdr").classList.remove("on");
+  mostrar("scIntro");
+  window.scrollTo({top:0});
+}
+</script>
+</body>
+</html>
