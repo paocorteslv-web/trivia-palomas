@@ -31,7 +31,7 @@ input:disabled,select:disabled,button:disabled{opacity:.55}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}.chips label{flex:1 1 auto;position:relative}
 .chips input{position:absolute;opacity:0;width:1px;height:1px;min-height:0;margin:0;padding:0}
 .chips span{display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 12px;border:1px solid var(--b);border-radius:8px;background:var(--bg)}
-.chips input:checked+span{background:var(--a);color:#fff;border-color:var(--a)}.chips input:focus-visible+span{outline:2px solid var(--a);outline-offset:2px}
+.chips input:checked+span{background:var(--a);color:#fff;border-color:var(--a)}.chips input:disabled+span{opacity:.55}.chips input:focus-visible+span{outline:2px solid var(--a);outline-offset:2px}
 .qty{display:flex;align-items:center;gap:4px;flex:0 0 auto}.qty input{width:64px;text-align:center;margin:0}
 .qty button{min-width:48px;min-height:48px;border:1px solid var(--b);border-radius:8px;background:var(--bg);color:var(--t);font-size:20px}
 .pn{flex:1 1 auto;min-height:48px;border:0;background:none;color:var(--t);text-align:left;font-size:15px;padding:0}

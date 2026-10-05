@@ -15,8 +15,8 @@ PSQL=(psql -h "$TMP" -p "$PORT" -U postgres -X -q -v ON_ERROR_STOP=1)
 "${PSQL[@]}" -c "create database carrito" >/dev/null
 DB=("${PSQL[@]}" -d carrito)
 "${DB[@]}" -f "$HERE/supabase_stub.sql" >/dev/null
-"${DB[@]}" -f "$ROOT/schema.sql" >/dev/null && echo "✔ schema.sql inicializa una base vacía"
-"${DB[@]}" -f "$ROOT/schema.sql" >/dev/null && echo "✔ schema.sql se puede volver a ejecutar"
+PGOPTIONS="-c client_min_messages=warning" "${DB[@]}" -f "$ROOT/schema.sql" >/dev/null && echo "✔ schema.sql inicializa una base vacía"
+PGOPTIONS="-c client_min_messages=warning" "${DB[@]}" -f "$ROOT/schema.sql" >/dev/null && echo "✔ schema.sql se puede volver a ejecutar"
 "${DB[@]}" -o /dev/null -f "$HERE/test_schema.sql" 2>&1 | sed 's/^psql:[^ ]* NOTICE:  /  /;s/^NOTICE:  /  /'
 # G) concurrencia real: dos sesiones abren la caja del mismo día a la vez; solo una puede
 "${DB[@]}" -c "delete from records where kind in('aperturas','cierres') and date=mza_today()-3" >/dev/null
