@@ -1,0 +1,1 @@
+{"rules": [{"path": "productos", "read": "view", "write": "admin"}, {"path": "config", "read": "view", "write": "admin"}, {"path": "inventario", "read": "view", "write": "admin"}, {"path": "futuros", "read": "view", "write": "admin"}, {"path": "revisiones", "read": "view", "write": "admin"}]}

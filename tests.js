@@ -1,0 +1,35 @@
+// Tests con un db simulado que aplica rules.json y un lease único (acquire). NO reemplazan la prueba con sesiones reales.
+const fs=require("fs"),vm=require("vm"),A=require("assert");
+const code=fs.readFileSync(__dirname+"/"+(process.argv[2]||"carrito.html"),"utf8").split("<script>")[1].split("</script>")[0];
+const RULES=JSON.parse(fs.readFileSync(__dirname+"/rules.json","utf8")).rules;
+const ctx=vm.createContext({console,document:{querySelector:()=>({innerHTML:""}),addEventListener(){}},claude:{use:async()=>null},supabase:{createClient:()=>({auth:{getSession:async()=>({data:{session:null}})}})},crypto:require("crypto"),Intl,alert(){},confirm:()=>true,prompt:()=>""});
+vm.runInContext(code,ctx);const run=s=>vm.runInContext(s,ctx);
+let role="ADMIN";const store={},leases={},LV={view:0,interact:1,admin:3},RL={ADMIN:3,OPERADOR:1};
+const need=(c,op)=>{const r=RULES.find(r=>r.path==c),min=r?r[op=="read"?"read":"write"]:(op=="read"?"view":"interact");if(RL[role]<LV[min]){const e=new Error("not_granted");e.code="not_granted";throw e}};
+const sync=c=>{ctx.__s=Object.entries(store[c]).map(([id,d])=>({...d,id}));run(`D.${c}=__s`)};
+ctx.mdb={collection:c=>({doc:id=>({async set(d){need(c,"write");(store[c]=store[c]||{})[id]={...d};sync(c)},async update(d){need(c,"write");Object.assign(store[c][id],d);sync(c)},
+ async get(){const x=(store[c]||{})[id];return{exists:!!x,data:()=>x}},async acquire({ttlMs}){const k=c+id;if(leases[k]>Date.now())return{acquired:false};leases[k]=Date.now()+ttlMs;return{acquired:true}}})})};
+const as=r=>{role=r;run(`me="${r}";admin=${r=="ADMIN"}`)};
+const T=[];const t=(n,f)=>T.push([n,f]);
+const t0=run("today()"),exp=()=>run(`dayExp("${t0}")`),oper=()=>run(`operating(live("ventas"),live("gastos"))`);
+t("A admin crea producto → operador ve → vende → admin ve",async()=>{as("ADMIN");await run('save("productos",{name:"Café",price:500,active:true})');as("OPERADOR");A.equal(run('live("productos").length'),1);
+ await run(`claim("aperturas","${t0}",{id:"${t0}",date:"${t0}",open:10000})`);
+ await run(`save("ventas",{date:"${t0}",medio:"EFECTIVO",items:[{name:"Café",qty:2,price:500}],total:saleTotal([{qty:2,price:500}])})`);as("ADMIN");A.equal(run('live("ventas").length'),1);A.equal(run('live("ventas")[0].created_by'),"OPERADOR");A.equal(exp(),11000)});
+t("B gasto efectivo baja caja",async()=>{as("OPERADOR");await run(`save("gastos",{date:"${t0}",type:"DIRECT",medio:"EFECTIVO",amount:200,desc:"x"})`);A.equal(exp(),10800)});
+t("C gasto transferencia no toca efectivo",async()=>{await run(`save("gastos",{date:"${t0}",type:"INDIRECT",medio:"TRANSFERENCIA",amount:300,desc:"y"})`);A.equal(exp(),10800)});
+t("D retiro baja caja, no cambia resultado",async()=>{const o=oper();await run(`save("retiros",{date:"${t0}",medio:"EFECTIVO",amount:100,person:"p"})`);A.equal(exp(),10700);A.equal(oper(),o)});
+t("E combustible estimado: resultado cambia, efectivo no",async()=>{const o=oper(),e=exp();await run(`save("gastos",{date:"${t0}",type:"INDIRECT",medio:"ESTIMADO",estimated:true,amount:600,desc:"comb"})`);A.equal(oper(),o-600);A.equal(exp(),e)});
+t("F cierre → venta eliminada → REQUIERE REVISIÓN → recalcular",async()=>{as("OPERADOR");const e=exp();A.ok(await run(`claim("cierres","${t0}",{id:"${t0}",date:"${t0}",expected:${e},counted:${e},diff:0})`));
+ A.equal(run('st(live("cierres")[0])'),"OK");A.equal(run('canDel(live("ventas")[0])'),false);as("ADMIN");await run('del("ventas",live("ventas")[0].id)');
+ A.equal(run('st(live("cierres")[0])'),"REQUIERE REVISIÓN");A.equal(run('live("cierres")[0].expected'),e);
+ const c=run('live("cierres")[0]'),n=exp();await run(`db.collection("cierres").doc(c.id).update({expected:${n}})`.replace("c.id",`"${t0}"`));A.equal(run('st(live("cierres")[0])'),"OK")});
+t("G dos aperturas simultáneas: solo una",async()=>{as("OPERADOR");const r=await Promise.all([1,2].map(()=>run('claim("aperturas","2099-01-01",{id:"2099-01-01",date:"2099-01-01",open:1})')));A.deepEqual(r.sort(),[false,true]);
+ Object.keys(leases).forEach(k=>delete leases[k]);A.equal(await run('claim("aperturas","2099-01-01",{id:"x",date:"2099-01-01",open:9})'),false);A.equal(run('live("aperturas").find(a=>a.date=="2099-01-01").open'),1)});
+t("H compra: sube stock, baja caja/saldo según medio",async()=>{as("ADMIN");await run('save("inventario",{id:"i1",name:"Harina",unit:"kg",stock0:0,min:20})');as("OPERADOR");const e=exp(),s0=run("proj()[0].ini");
+ await run(`save("compras",{date:"${t0}",item:"i1",qty:10,amount:1000,medio:"EFECTIVO",desc:"h"})`);A.equal(run('stockOf(live("inventario")[0])'),10);A.equal(exp(),e-1000);A.equal(run("proj()[0].ini"),s0-1000);
+ await run(`save("compras",{date:"${t0}",item:"i1",qty:5,amount:500,medio:"TRANSFERENCIA",desc:"h"})`);A.equal(exp(),e-1000);A.equal(run("proj()[0].ini"),s0-1500);A.ok(run('stockOf(live("inventario")[0])<=live("inventario")[0].min'))});
+t("I operador no puede tocar configuración/productos/stock/futuros",async()=>{as("OPERADOR");for(const c of["config","productos","inventario","futuros"])await A.rejects(run(`db.collection("${c}").doc("z").set({a:1})`),{code:"not_granted"})});
+t("Datos inválidos ignorados y proyección sin datos inventados",async()=>{run('D.gastos.push({id:"bad",date:"2026-01-01",amount:-5,type:"DIRECT"})');A.ok(!run('live("gastos").some(g=>g.id=="bad")'));A.equal(run("proj()[0].inc"),0)});
+t("Retiros planificados separados del saldo operativo",async()=>{as("ADMIN");await run(`save("futuros",{date:"${t0}",kind:"RETIRO",freq:"ONCE",amount:500,desc:"r"})`);const w=run("proj()[0]");A.equal(w.ret,500);A.equal(w.saldo,w.so-500)});
+t("Comprobante: tipo/tamaño validados",async()=>{await A.rejects(run('up({size:6e6,type:"image/png"})'));await A.rejects(run('up({size:10,type:"text/html"})'))});
+(async()=>{await new Promise(r=>setTimeout(r,50));run("db=mdb");let f=0;for(const[n,fn]of T){try{await fn();console.log("✔",n)}catch(e){f++;console.log("✘",n,"\n  ",e.message)}}console.log(f?`${f} FALLAN`:"TODOS OK");process.exit(f?1:0)})();

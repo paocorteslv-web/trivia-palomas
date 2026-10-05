@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><title>Carrito</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{--bg:#faf7f2;--c:#fff;--t:#222;--m:#777;--a:#c2410c;--r:#b91c1c;--g:#15803d;--b:#e5ded2;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1a1714;--c:#26221e;--t:#eee;--m:#a99;--b:#3a342d}}
+:root[data-theme=dark]{--bg:#1a1714;--c:#26221e;--t:#eee;--m:#a99;--b:#3a342d}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--t);font:15px system-ui,sans-serif;padding-bottom:70px}
+main{max-width:640px;margin:auto;padding:12px}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;overflow-x:auto;background:var(--c);border-top:1px solid var(--b);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px))}
+nav button{flex:0 0 auto;border:0;background:none;color:var(--m);padding:12px 14px;min-height:44px;font-size:13px;border-radius:8px}
+nav button.on{background:var(--a);color:#fff}
+.card{background:var(--c);border:1px solid var(--b);border-radius:12px;padding:12px;margin:10px 0}
+h2{margin:6px 0}h3{margin:0 0 8px;font-size:15px}
+input,select,button.p{width:100%;min-height:48px;padding:12px;margin:4px 0;border:1px solid var(--b);border-radius:8px;background:var(--bg);color:var(--t);font-size:16px}
+button.p{background:var(--a);color:#fff;border:0;font-weight:600}
+.row{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--b)}
+.k{font-size:20px;font-weight:700}.g{color:var(--g)}.r{color:var(--r)}.m{color:var(--m);font-size:13px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.al{background:#fee2e2;color:#7f1d1d;padding:8px;border-radius:8px;margin:6px 0}
+.x{min-width:40px;min-height:40px;border:0;background:none;color:var(--r)}
+</style></head><body><main id="app"><p>Cargando…</p></main><nav id="nav"></nav>
+<script>
+const $=s=>document.querySelector(s),ARS=n=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS"}).format(n||0);
+const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+const dmy=s=>s?s.split("-").reverse().join("/"):"";
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const KINDS=["ventas","gastos","retiros","viajes","aperturas","cierres","productos","futuros","config","compras","inventario","ajustes","revisiones"];
+let P=[],sb,dirty=false,db,user,me,admin=false,tab="inicio",D={};KINDS.forEach(k=>D[k]=[]);
+const TABS=[["inicio","Inicio"],["venta","Venta"],["gasto","Gasto"],["compra","Compras"],["stock","Stock"],["caja","Caja"],["retiro","Retiro"],["comb","Combustible"],["proy","Proyección"],["rep","Reportes"],["cfg","Config"],["out","Salir"]];
+const OK={ventas:x=>x.total>0&&(x.items||[]).every(i=>i.qty>0&&i.price>0),gastos:x=>x.amount>0,retiros:x=>x.amount>0,compras:x=>x.amount>0&&x.qty>0,futuros:x=>x.amount>0};
+const live=k=>D[k].filter(x=>!x.deleted&&/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(x.date||"2000-01-01")&&(!OK[k]||OK[k](x)));
+const cfg=()=>Object.assign({medios:["EFECTIVO","TRANSFERENCIA","TARJETA","QR"],cats:["Insumos","Alquiler","Servicios","Mantenimiento","Otros"],consumo:0.1,precio:1000,empleados:[],capital:0},(D.config.find(x=>x.id=="main")||{}));
+const real=()=>live("gastos").filter(g=>!g.estimated),canDel=x=>admin||(x.created_by==me&&x.date==today()&&!closed(x.date));
+const sum=(a,f=x=>x.amount)=>a.reduce((s,x)=>s+(+f(x)||0),0);
+const cash=(a)=>a.filter(x=>x.medio=="EFECTIVO");
+// --- cálculos puros (testeables) ---
+function saleTotal(items){return sum(items,i=>i.qty*i.price)}
+function expectedCash(open,ventas,gastos,retiros,otrosIn=0,otrosOut=0){return open+sum(cash(ventas),v=>v.total)+otrosIn-sum(cash(gastos))-sum(cash(retiros))-otrosOut}
+function fuel(ini,dest,ret,cons,precio){const km=ret-ini,l=km*cons;return{kmIda:dest-ini,kmVuelta:ret-dest,km,l,cost:l*precio}}
+function operating(ventas,gastos){return sum(ventas,v=>v.total)-sum(gastos.filter(g=>g.type=="DIRECT"))-sum(gastos.filter(g=>g.type=="INDIRECT"))}
+function dayExp(d){const ap=live("aperturas").find(a=>a.date==d);if(!ap)return null;return expectedCash(ap.open,live("ventas").filter(v=>v.date==d),live("gastos").filter(g=>g.date==d).concat(live("compras").filter(c=>c.date==d)),live("retiros").filter(r=>r.date==d))}
+const closed=d=>live("cierres").some(c=>c.date==d),eff=c=>{const r=D.revisiones.filter(x=>x.date==c.date).sort((a,b)=>a.at.localeCompare(b.at)).pop();return r?r.expected:c.expected},st=c=>Math.abs((dayExp(c.date)??0)-eff(c))<0.005?"OK":"REQUIERE REVISIÓN";
+const stockOf=i=>(+i.stock0||0)+sum(live("compras").filter(c=>c.item==i.id),c=>c.qty)+sum(live("ajustes").filter(a=>a.item==i.id),a=>a.delta);
+async function claim(col,id,data){const ref=db.collection(col).doc(id),l=await ref.acquire({holder:me,ttlMs:5000});if(!l.acquired)return false;const x=await ref.get();if(x.exists&&x.data()&&x.data().date)return false;try{await ref.set(data)}catch(e){if(e.code=="23505")return false;throw e}return true}
+async function up(f){if(!f||!f.size)return"";if(!["image/jpeg","image/png","application/pdf"].includes(f.type))throw new Error("Comprobante: solo JPG, PNG o PDF");if(f.size>5e6)throw new Error("Comprobante: máximo 5 MB");const p=me+"/"+crypto.randomUUID()+"."+f.type.split("/")[1].replace("jpeg","jpg");const{error}=await sb.storage.from("comprobantes").upload(p,f,{contentType:f.type});if(error)throw new Error("No se pudo subir el comprobante");return p}
+async function save(k,obj){const id=obj.id||crypto.randomUUID(),n=new Date().toISOString();const prev=D[k].find(x=>x.id==id);
+ const o={...obj,id,updated_at:n,updated_by:me};if(!prev){o.created_at=n;o.created_by=me}else{o.created_at=prev.created_at;o.created_by=prev.created_by}
+ await db.collection(k).doc(id).set(o)}
+const del=async(k,id)=>{if(confirm("¿Eliminar este registro?"))await db.collection(k).doc(id).update({deleted:true,updated_at:new Date().toISOString(),updated_by:me})};
+const fd=f=>Object.fromEntries(new FormData(f));
+const sel=(n,a)=>`<select name="${n}">${a.map(x=>`<option>${esc(x)}</option>`).join("")}</select>`;
+const list=(k,fn)=>live(k).sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,30).map(x=>`<div class="row"><span>${dmy(x.date)} ${fn(x)}</span><span>${x.receipt?`<a href="#" data-rcp="${esc(x.receipt)}">📎</a> `:""}${canDel(x)?`<button class="x" data-del="${k}:${x.id}">✕</button>`:""}</span></div>`).join("")||'<p class="m">Sin registros.</p>';
+// --- vistas ---
+const V={
+inicio(){const t=today(),vt=live("ventas").filter(v=>v.date==t),gt=live("gastos").filter(g=>g.date==t),ap=live("aperturas").find(a=>a.date==t),ci=live("cierres").find(c=>c.date==t);
+ const exp=ap?dayExp(t):null;
+ const mes=t.slice(0,7),vm=live("ventas").filter(v=>v.date.startsWith(mes)),gm=live("gastos").filter(g=>g.date.startsWith(mes));
+ const sf=sum(live("ventas"),v=>v.total)-sum(real())-sum(live("retiros"))-sum(live("compras"))+cfg().capital,prox=live("futuros").filter(f=>f.date>=t).sort((a,b)=>a.date.localeCompare(b.date));
+ let al="";live("cierres").filter(c=>st(c)!="OK").forEach(c=>al+=`<div class="al">Arqueo ${dmy(c.date)}: REQUIERE REVISIÓN</div>`);live("inventario").filter(i=>stockOf(i)<=i.min).forEach(i=>al+=`<div class="al">Stock bajo: ${esc(i.name)}</div>`);const bad=KINDS.reduce((n,k)=>n+D[k].filter(x=>!x.deleted).length-live(k).length,0);if(bad)al+=`<div class="al">${bad} registro(s) inválido(s) ignorados en los cálculos</div>`;if(ci&&ci.diff)al+=`<div class="al">Diferencia de caja hoy: ${ARS(ci.diff)}</div>`;
+ const p=proj();if(p.some(w=>w.saldo<0))al+=`<div class="al">Faltante de fondos proyectado</div>`;
+ return`${al}<div class="grid"><div class="card">Ventas hoy<div class="k">${ARS(sum(vt,v=>v.total))}</div></div><div class="card">Gastos hoy<div class="k">${ARS(sum(gt))}</div></div>
+ <div class="card">Resultado operativo (mes)<div class="k ${operating(vm,gm)<0?"r":"g"}">${ARS(operating(vm,gm))}</div></div><div class="card">Saldo financiero<div class="k">${ARS(sf)}</div></div>
+ <div class="card">Efectivo inicial<div class="k">${ap?ARS(ap.open):"—"}</div></div><div class="card">Efectivo esperado<div class="k">${exp==null?"—":ARS(exp)}</div></div>
+ <div class="card">Efectivo contado<div class="k">${ci?ARS(ci.counted):"—"}</div></div><div class="card">Diferencia<div class="k">${ci?ARS(ci.counted-eff(ci)):"—"}</div></div>
+ <div class="card">Retiros del mes<div class="k">${ARS(sum(live("retiros").filter(r=>r.date.startsWith(mes))))}</div></div><div class="card">Necesidad próx. semana<div class="k">${p[0]&&p[0].saldo<0?ARS(-p[0].saldo):"—"}</div></div></div>
+ <div class="card"><h3>Próximos pagos</h3>${prox.slice(0,5).map(f=>`<div class="row"><span>${dmy(f.date)} ${esc(f.desc)}</span><b>${ARS(f.amount)}</b></div>`).join("")||'<p class="m">Sin pagos cargados.</p>'}</div>`},
+venta(){const prods=live("productos").filter(p=>p.active!==false);if(!prods.length)return'<div class="card">Primero cargá productos en Config (solo ADMIN).</div>';
+ return`<h2>Nueva venta</h2><form id="fv" class="card">${prods.map(p=>`<div class="row"><span>${esc(p.name)} <span class="m">${ARS(p.price)}</span></span><input type="number" min="0" name="q_${p.id}" placeholder="0" style="width:80px" inputmode="numeric"></div>`).join("")}
+ ${sel("medio",cfg().medios)}<input name="date" type="date" value="${today()}"><input name="notes" placeholder="Notas"><button class="p">Guardar venta</button></form>
+ <div class="card"><h3>Últimas</h3>${list("ventas",v=>`${esc(v.medio)} <b>${ARS(v.total)}</b>`)}</div>`},
+gasto(){const c=cfg();return`<h2>Nuevo gasto</h2><form id="fg" class="card"><input name="desc" placeholder="Descripción" required><input name="amount" type="number" step="0.01" min="0.01" placeholder="Monto" required inputmode="decimal">
+ <select name="type"><option value="DIRECT">Costo directo</option><option value="INDIRECT">Gasto indirecto</option></select>${sel("cat",c.cats)}${sel("medio",c.medios)}<input name="supplier" placeholder="Proveedor"><input name="date" type="date" value="${today()}"><label class="m">Comprobante (foto o PDF)</label><input name="file" type="file" accept="image/*,application/pdf"><button class="p">Guardar gasto</button></form>
+ <div class="card">${list("gastos",g=>`${esc(g.desc)} · ${esc(g.medio)} <b>${ARS(g.amount)}</b>`)}</div>`},
+compra(){const its=live("inventario");if(!its.length)return'<div class="card">Un ADMIN debe cargar ítems en Stock primero.</div>';const c=cfg();return`<h2>Nueva compra</h2><form id="fcmp" class="card"><select name="item">${its.map(i=>`<option value="${i.id}">${esc(i.name)} (${esc(i.unit)})</option>`).join("")}</select><input name="qty" type="number" step="0.01" min="0.01" placeholder="Cantidad" required><input name="amount" type="number" step="0.01" min="0.01" placeholder="Importe total" required><input name="supplier" placeholder="Proveedor"><input name="desc" placeholder="Concepto" required>${sel("cat",c.cats)}${sel("medio",c.medios)}<input name="date" type="date" value="${today()}"><input name="notes" placeholder="Observaciones"><label class="m">Comprobante (JPG, PNG o PDF, máx 5 MB)</label><input name="file" type="file" accept="image/jpeg,image/png,application/pdf"><button class="p">Guardar compra</button></form><p class="m">Suma stock y descuenta caja/banco; no es costo del período. Lo que no es stock va en Gasto.</p><div class="card">${list("compras",x=>`${esc(x.desc)} · ${esc(x.medio)} <b>${ARS(x.amount)}</b>`)}</div>`},
+stock(){return`<h2>Stock</h2><div class="card">${live("inventario").map(i=>{const q=stockOf(i);return`<div class="row"><span>${esc(i.name)} <span class="m">mín ${i.min} ${esc(i.unit)}</span></span><span class="${q<=i.min?"r":""}"><b>${q}</b> ${esc(i.unit)} <button class="x" data-adj="${i.id}">±</button></span></div>`}).join("")||'<p class="m">Sin ítems.</p>'}</div>${admin?`<form id="fi" class="card"><h3>Nuevo ítem</h3><input name="name" placeholder="Nombre" required><input name="unit" placeholder="Unidad (kg, un, l)" required><input name="stock0" type="number" step="0.01" min="0" placeholder="Stock inicial" required><input name="min" type="number" step="0.01" min="0" placeholder="Stock mínimo" required><input name="cost" type="number" step="0.01" min="0" placeholder="Costo unitario"><input name="supplier" placeholder="Proveedor"><button class="p">Agregar</button></form>`:""}`},
+caja(){const t=today(),ap=live("aperturas").find(a=>a.date==t),ci=live("cierres").find(c=>c.date==t);
+ const exp=ap?dayExp(t):0;
+ return`<h2>Caja y arqueo — ${dmy(t)}</h2>`+(!ap?`<form id="fa" class="card"><h3>Abrir caja</h3><input name="open" type="number" step="0.01" min="0" placeholder="Efectivo inicial" required><button class="p">Abrir</button></form>`
+ :ci?`<div class="card">Día cerrado — ${st(ci)}<br>Esperado ${ARS(eff(ci))} (al cierre ${ARS(ci.expected)}) · Contado ${ARS(ci.counted)}<div class="k ${ci.counted-eff(ci)?"r":"g"}">Diferencia ${ARS(ci.counted-eff(ci))}</div></div>`
+ :`<form id="fc" class="card"><h3>Cerrar caja</h3><p>Efectivo inicial: ${ARS(ap.open)}<br>Esperado (solo efectivo): <b>${ARS(exp)}</b></p><input name="counted" type="number" step="0.01" min="0" placeholder="Efectivo contado" required><input name="notes" placeholder="Notas"><button class="p">Cerrar día</button></form>`)
+ +`<div class="card"><h3>Arqueos</h3>${live("cierres").sort((a,b)=>b.date.localeCompare(a.date)).slice(0,15).map(c=>`<div class="row"><span>${dmy(c.date)} ${st(c)=="OK"?"":`<b class="r">REVISAR</b> ${admin?`<button class="x" data-rc="${c.date}">Recalcular</button>`:""}`}</span><b class="${c.diff?"r":"g"}">${ARS(c.diff)}</b></div>`).join("")||'<p class="m">Sin arqueos.</p>'}</div>`},
+retiro(){return`<h2>Retiros personales</h2><form id="fr" class="card"><input name="person" placeholder="Persona" required><input name="amount" type="number" step="0.01" min="0.01" placeholder="Monto" required>${sel("medio",cfg().medios)}<input name="date" type="date" value="${today()}"><button class="p">Guardar retiro</button></form>
+ <p class="m">Los retiros no afectan el resultado operativo.</p><div class="card">${list("retiros",r=>`${esc(r.person)} · ${esc(r.medio)} <b>${ARS(r.amount)}</b>`)}</div>`},
+comb(){const c=cfg();return`<h2>Combustible</h2><form id="ff" class="card"><input name="ini" type="number" step="0.1" placeholder="Km inicial" required><input name="dest" type="number" step="0.1" placeholder="Km en destino" required><input name="ret" type="number" step="0.1" placeholder="Km al volver" required>
+ <p class="m">Consumo ${c.consumo} l/km · $${c.precio}/l (se guardan en cada viaje)</p><input name="date" type="date" value="${today()}"><label><input type="checkbox" name="asexp" checked style="width:auto"> Registrar como gasto indirecto estimado</label><button class="p">Guardar viaje</button></form>
+ <div class="card">${list("viajes",v=>`${v.km} km · ${v.l.toFixed(1)} l <b>${ARS(v.cost)}</b>`)}</div>`},
+proy(){const p=proj(),h=hist();return`<h2>Proyección semanal</h2>${h.ok?`<p class="m">Ingresos por promedio de cada día de la semana (${h.n} días con ventas). Combustible según viajes registrados.</p>`:'<p class="m">Historial insuficiente (menos de 7 días con ventas): no se proyectan ingresos automáticos.</p>'}
+ ${p.map(w=>`<div class="card"><h3>${dmy(w.from)} → ${dmy(w.to)}</h3>${[["Saldo actual / inicial",w.ini],["+ Ingresos proyectados",w.inc],["− Compras futuras",w.compras],["− Gastos futuros",w.gastos],["− Sueldos",w.sueldos],["− Combustible",w.comb]].map(([l,x])=>`<div class="row"><span>${l}</span><span>${ARS(x)}</span></div>`).join("")}<div class="row"><b>Saldo operativo</b><b class="${w.so<0?"r":"g"}">${ARS(w.so)}</b></div><div class="row"><span>− Retiros planificados</span><span>${ARS(w.ret)}</span></div><div class="row"><b>Saldo final</b><b class="${w.saldo<0?"r":"g"}">${ARS(w.saldo)}</b></div>${w.so<0?`<div class="al">Necesidad operativa: ${ARS(-w.so)}</div>`:""}</div>`).join("")}
+ <form id="fp" class="card"><h3>Pago / ingreso futuro</h3><input name="desc" placeholder="Descripción" required><input name="amount" type="number" step="0.01" min="0.01" placeholder="Monto" required><select name="kind"><option value="GASTO">Gasto</option><option value="COMPRA">Compra</option><option value="SUELDO">Sueldo</option><option value="RETIRO">Retiro planificado</option><option value="INGRESO">Ingreso</option></select><input name="date" type="date" required><select name="freq"><option value="ONCE">Una vez</option><option value="WEEKLY">Semanal</option><option value="MONTHLY">Mensual</option></select><button class="p">Agregar</button></form>
+ <div class="card">${live("futuros").map(f=>`<div class="row"><span>${dmy(f.date)} ${esc(f.desc)} (${f.kind||"GASTO"}, ${f.freq})</span><span>${ARS(f.amount)} <button class="x" data-del="futuros:${f.id}">✕</button></span></div>`).join("")||'<p class="m">Sin compromisos.</p>'}</div>`},
+rep(){const m=today().slice(0,7),v=live("ventas").filter(x=>x.date.startsWith(m)),g=live("gastos").filter(x=>x.date.startsWith(m)),by={};
+ v.forEach(s=>s.items.forEach(i=>by[i.name]=(by[i.name]||0)+i.qty*i.price));const mp={};v.forEach(s=>mp[s.medio]=(mp[s.medio]||0)+s.total);
+ return`<h2>Reporte ${m.split("-").reverse().join("/")}</h2><div class="card"><h3>Ventas por producto</h3>${Object.entries(by).map(([k,x])=>`<div class="row"><span>${esc(k)}</span><b>${ARS(x)}</b></div>`).join("")}</div>
+ <div class="card"><h3>Ventas por medio de pago</h3>${Object.entries(mp).map(([k,x])=>`<div class="row"><span>${esc(k)}</span><b>${ARS(x)}</b></div>`).join("")}</div>
+ <div class="card"><h3>Resultado operativo</h3><div class="row"><span>Ingresos</span><span>${ARS(sum(v,x=>x.total))}</span></div><div class="row"><span>Costos directos</span><span>${ARS(sum(g.filter(x=>x.type=="DIRECT")))}</span></div><div class="row"><span>Gastos indirectos</span><span>${ARS(sum(g.filter(x=>x.type=="INDIRECT")))}</span></div><div class="row"><b>Resultado</b><b>${ARS(operating(v,g))}</b></div></div>
+ <button class="p" id="csv">Exportar CSV</button>`},
+cfg(){if(!admin)return'<div class="card">Solo ADMIN puede configurar.</div>';const c=cfg();
+ return`<h2>Configuración</h2><form id="fcfg" class="card"><label>Consumo (l/km)</label><input name="consumo" type="number" step="0.001" value="${c.consumo}"><label>Precio combustible ($/l)</label><input name="precio" type="number" step="0.01" value="${c.precio}">
+ <label>Capital inicial ($)</label><input name="capital" type="number" step="0.01" min="0" value="${c.capital}"><label>Medios de pago (coma)</label><input name="medios" value="${esc(c.medios.join(","))}"><label>Categorías de gasto (coma)</label><input name="cats" value="${esc(c.cats.join(","))}"><button class="p">Guardar</button></form>
+ <form id="fprod" class="card"><h3>Productos</h3>${live("productos").map(p=>`<div class="row"><span>${esc(p.name)} ${ARS(p.price)} <button type="button" class="x" data-ed="${p.id}">✎</button></span><button type="button" class="x" data-del="productos:${p.id}">✕</button></div>`).join("")}<input name="name" placeholder="Nombre" required><input name="price" type="number" step="0.01" placeholder="Precio" required><button class="p">Agregar producto</button>
+ ${live("productos").length?"":'<button type="button" class="p" id="seedp" style="margin-top:8px;background:#555">Cargar productos iniciales</button>'}</form><div class="card"><h3>Usuarios</h3>${P.map(u=>`<div class="row"><span>${esc(u.name)} · ${u.role}${u.active?"":" (inactivo)"}</span><span><button class="x" data-role="${u.id}">Rol</button><button class="x" data-act="${u.id}">${u.active?"Desactivar":"Activar"}</button></span></div>`).join("")}</div>`}};
+// --- proyección ---
+function hist(){const d={};live("ventas").forEach(v=>d[v.date]=(d[v.date]||0)+v.total);const by={};Object.entries(d).forEach(([k,x])=>{const w=new Date(k+"T12:00:00").getDay();by[w]=by[w]||{s:0,n:0};by[w].s+=x;by[w].n++});const n=Object.keys(d).length,tr=live("viajes");return{ok:n>=7,n,by,fuel:tr.length>=3?sum(tr,x=>x.cost)/tr.length:0}}
+function proj(){const h=hist(),t=new Date(today()+"T12:00:00"),f=x=>x.toISOString().slice(0,10),F=live("futuros");
+let s=cfg().capital+sum(live("ventas"),v=>v.total)-sum(real())-sum(live("retiros"))-sum(live("compras")),out=[];
+for(let w=0;w<4;w++){const a=new Date(t.getTime()+w*7*864e5),b=new Date(a.getTime()+6*864e5),from=f(a),to=f(b),L={GASTO:0,COMPRA:0,SUELDO:0,RETIRO:0,INGRESO:0};let inc=0,comb=0;
+ if(h.ok)for(let i=0;i<7;i++){const q=h.by[new Date(a.getTime()+i*864e5).getDay()];if(q&&q.n>=2){inc+=q.s/q.n;comb+=h.fuel}}
+ F.forEach(x=>{let n=0;if(x.freq=="ONCE")n=x.date>=from&&x.date<=to?1:0;else if(x.freq=="WEEKLY")n=x.date<=to?1:0;else for(let d=new Date(a);d<=b;d=new Date(d.getTime()+864e5))if(f(d)>=x.date&&f(d).slice(8)==x.date.slice(8))n++;L[L[x.kind]!==undefined?x.kind:"GASTO"]+=x.amount*n});
+ inc+=L.INGRESO;const oper=L.GASTO+L.COMPRA+L.SUELDO+comb,so=s+inc-oper,sf=so-L.RETIRO;
+ out.push({from,to,ini:s,inc,compras:L.COMPRA,gastos:L.GASTO,sueldos:L.SUELDO,comb,oper,ret:L.RETIRO,so,saldo:sf});s=sf}return out}
+// --- render ---
+function render(){if(!db)return;$("#nav").innerHTML=TABS.map(([k,l])=>`<button data-t="${k}" class="${k==tab?"on":""}">${l}</button>`).join("");
+ if(!dirty)$("#app").innerHTML=V[tab]()}
+document.addEventListener("input",()=>dirty=true);
+document.addEventListener("click",async e=>{const t=e.target;
+ if(t.dataset.t=="out"){await sb.auth.signOut();return location.reload()}
+ if(t.dataset.rcp){e.preventDefault();const{data}=await sb.storage.from("comprobantes").createSignedUrl(t.dataset.rcp,300);if(data)window.open(data.signedUrl,"_blank")}
+ if(t.id=="signup"){const f=t.form,em=f.email.value,pw=f.pw.value;if(!em||pw.length<8)return alert("Ingresá email y contraseña (mínimo 8 caracteres)");const{error}=await sb.auth.signUp({email:em,password:pw});alert(error?error.message:"Cuenta creada. Si pide confirmar el email, revisá tu casilla. El primer usuario es ADMIN; los demás los activa un ADMIN.")}
+ if((t.dataset.role||t.dataset.act)&&admin){const u=P.find(x=>x.id==(t.dataset.role||t.dataset.act));if(u.id==me)return alert("No podés cambiar tu propio usuario");const{error}=await sb.from("profiles").update(t.dataset.role?{role:u.role=="ADMIN"?"OPERADOR":"ADMIN"}:{active:!u.active}).eq("id",u.id);if(error)return alert(error.message);await refreshP()}
+ if(t.dataset.t){tab=t.dataset.t;dirty=false;$("#app").innerHTML="";render()}
+ if(t.dataset.del){const[k,id]=t.dataset.del.split(":");const x=D[k].find(y=>y.id==id);if(x&&(k=="productos"?admin:k=="futuros"||canDel(x)))await del(k,id);else alert("Sin permiso")}
+ if(t.dataset.rc&&admin){const c=live("cierres").find(x=>x.date==t.dataset.rc),e=dayExp(c.date);if(e!=null&&confirm("Recalcular arqueo: esperado al cierre "+ARS(c.expected)+" → "+ARS(e)+". Queda registrado."))await db.collection("revisiones").doc(crypto.randomUUID()).set({date:c.date,expected:e,at:new Date().toISOString(),by:me})}
+ if(t.dataset.adj){const n=+prompt("Ajuste de stock (+/−), ej. -2 por consumo");if(Number.isFinite(n)&&n!==0)await save("ajustes",{item:t.dataset.adj,delta:n,date:today()})}
+ if(t.dataset.ed&&admin){const p=D.productos.find(y=>y.id==t.dataset.ed),n=+prompt("Nuevo precio para "+p.name+" (no cambia ventas ya cargadas)",p.price);if(n>0)await save("productos",{...p,price:n})}
+ if(t.id=="seedp"){for(const n of[["Café",0],["Tortafrita",0],["Factura",0],["Tortita",0],["Otros",0]])await save("productos",{name:n[0],price:n[1],active:true})}
+ if(t.id=="csv"){const r=[["fecha","tipo","detalle","medio","monto"]];live("ventas").forEach(v=>r.push([v.date,"VENTA","",v.medio,v.total]));live("gastos").forEach(g=>r.push([g.date,g.type,g.desc,g.medio,-g.amount]));live("retiros").forEach(g=>r.push([g.date,"RETIRO",g.person,g.medio,-g.amount]));
+  const csv=r.map(x=>x.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="movimientos.csv";a.click()}});
+document.addEventListener("submit",async e=>{e.preventDefault();const f=e.target,d=fd(f),id=f.id,t=today();
+ if(id=="fl"){const{error}=await sb.auth.signInWithPassword({email:d.email,password:d.pw});if(error)return alert("Email o contraseña incorrectos");return location.reload()}
+ try{
+ if(["fv","fg","fr","fcmp"].includes(id)){if(!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(d.date||""))return alert("Fecha inválida");if(!admin&&closed(d.date))return alert("Ese día ya está cerrado: solo un ADMIN puede cargar movimientos")}
+ if(id=="fv"){const items=live("productos").map(p=>({pid:p.id,name:p.name,qty:+d["q_"+p.id]||0,price:p.price})).filter(i=>i.qty>0);if(!items.length)return alert("Cargá al menos un producto");if(items.some(i=>!(i.price>0)))return alert("Hay productos sin precio: un ADMIN debe cargarlo en Config");await save("ventas",{date:d.date,medio:d.medio,notes:d.notes,items,total:saleTotal(items)})}
+ if(id=="fg"){if(!(+d.amount>0))return;const file=d.file;delete d.file;const receipt=await up(file);await save("gastos",{...d,amount:+d.amount,receipt})}
+ if(id=="fr"){if(!(+d.amount>0))return;await save("retiros",{...d,amount:+d.amount})}
+ if(id=="fa"){if(d.open===""||!(+d.open>=0))return alert("Efectivo inicial inválido");if(!await claim("aperturas",t,{id:t,date:t,open:+d.open,created_by:me,created_at:new Date().toISOString()}))return alert("La caja de hoy ya fue abierta")}
+ if(id=="fc"){const e=dayExp(t);if(e==null||d.counted===""||!(+d.counted>=0))return alert("Efectivo contado inválido");if(!await claim("cierres",t,{id:t,date:t,expected:e,counted:+d.counted,diff:+d.counted-e,notes:d.notes,created_by:me,closed_at:new Date().toISOString()}))return alert("El día ya fue cerrado")}
+ if(id=="fcmp"){const file=d.file;delete d.file;if(!(+d.amount>0&&+d.qty>0))return alert("Importe y cantidad deben ser mayores a 0");if(!live("inventario").some(i=>i.id==d.item))return alert("Ítem inválido");const receipt=await up(file);await save("compras",{...d,amount:+d.amount,qty:+d.qty,receipt})}
+ if(id=="fi"&&admin){if(!(+d.stock0>=0&&+d.min>=0))return alert("Valores inválidos");await save("inventario",{name:d.name,unit:d.unit,stock0:+d.stock0,min:+d.min,cost:+d.cost||0,supplier:d.supplier})}
+ if(id=="ff"){const c=cfg(),r=fuel(+d.ini,+d.dest,+d.ret,c.consumo,c.precio);if(!(c.consumo>0&&c.precio>0))return alert("Configurá consumo y precio");if(r.km<=0||r.kmIda<0||r.kmVuelta<0)return alert("Kilometraje inválido");
+  await save("viajes",{date:d.date,ini:+d.ini,dest:+d.dest,ret:+d.ret,km:r.km,l:r.l,cost:r.cost,consumo:c.consumo,precio:c.precio});
+  if(d.asexp)await save("gastos",{date:d.date,type:"INDIRECT",cat:"Combustible",desc:"Combustible estimado",amount:r.cost,medio:"ESTIMADO",estimated:true})}
+ if(id=="fp"){if(!(+d.amount>0))return alert("Monto inválido");await save("futuros",{...d,amount:+d.amount})}
+ if(id=="fcfg"&&admin&&!(+d.consumo>0&&+d.precio>0))return alert("Valores inválidos");
+ if(id=="fcfg"&&admin)await db.collection("config").doc("main").set({capital:+d.capital||0,consumo:+d.consumo,precio:+d.precio,medios:[...new Set(["EFECTIVO",...d.medios.split(",").map(s=>s.trim().toUpperCase()).filter(x=>x&&x!="ESTIMADO")])],cats:d.cats.split(",").map(s=>s.trim()).filter(Boolean),updated_by:me});
+ if(id=="fprod"&&admin)await save("productos",{name:d.name,price:+d.price,active:true});
+ f.reset();dirty=false;render()}catch(err){alert(err.code=="not_granted"?"No tenés permiso para esta acción":err.message||"No se pudo guardar")}});
+const SB_URL="PEGAR_URL_DEL_PROYECTO",SB_KEY="PEGAR_CLAVE_ANON_PUBLICA"; // la clave anon es pública; la protección está en schema.sql
+const err=e=>{const x=new Error(e.message);x.code=e.code=="42501"?"not_granted":e.code;return x};
+const REC=r=>({...r.data,id:r.id,date:r.date||r.data.date,deleted:r.deleted,created_by:r.created_by,created_at:r.created_at});
+const mkRef=(k,id)=>({strict:false,async acquire(){this.strict=true;return{acquired:true}},
+ async get(){const{data}=await sb.from("records").select("*").eq("kind",k).eq("id",id).maybeSingle();return{exists:!!data,data:()=>data&&REC(data)}},
+ async set(o){const row={kind:k,id,date:o.date||null,data:o,deleted:!!o.deleted};const{error}=await(this.strict?sb.from("records").insert(row):sb.from("records").upsert(row,{onConflict:"kind,id"}));if(error)throw err(error)},
+ async update(p){const{data:c,error:e1}=await sb.from("records").select("*").eq("kind",k).eq("id",id).single();if(e1)throw err(e1);const o={...c.data,...p},{error}=await sb.from("records").update({data:o,date:o.date||null,deleted:!!o.deleted}).eq("kind",k).eq("id",id);if(error)throw err(error)}});
+async function loadAll(){let all=[],from=0;for(;;){const{data,error}=await sb.from("records").select("*").order("created_at").range(from,from+999);if(error)return alert(err(error).message);all=all.concat(data);if(data.length<1000)break;from+=1000}
+ KINDS.forEach(k=>D[k]=[]);all.forEach(r=>D[r.kind]&&D[r.kind].push(REC(r)));render()}
+async function refreshP(){const{data}=await sb.from("profiles").select("*");P=data||[];render()}
+async function start(session){me=session.user.id;await refreshP();const m=P.find(u=>u.id==me);if(!m||!m.active){$("#app").innerHTML='<div class="card">Tu cuenta espera activación de un ADMIN.</div><button class="p" id="lo">Salir</button>';document.getElementById("lo").onclick=async()=>{await sb.auth.signOut();location.reload()};return}
+ admin=m.role=="ADMIN";db={collection:k=>({doc:id=>mkRef(k,id)})};await loadAll();let tm;sb.channel("r").on("postgres_changes",{event:"*",schema:"public",table:"records"},()=>{clearTimeout(tm);tm=setTimeout(loadAll,300)}).subscribe()}
+(async()=>{sb=supabase.createClient(SB_URL,SB_KEY);const{data:{session}}=await sb.auth.getSession();
+ if(session)return start(session);
+ $("#app").innerHTML='<h2>Ingresar</h2><form id="fl" class="card"><input name="email" type="email" required placeholder="Email" autocomplete="username"><input name="pw" type="password" minlength="8" required placeholder="Contraseña (mín. 8)" autocomplete="current-password"><button class="p">Ingresar</button><button type="button" class="p" id="signup" style="background:#555">Crear cuenta</button></form>'})();
+</script></body></html>
+
